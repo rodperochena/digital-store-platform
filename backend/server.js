@@ -10,7 +10,8 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "server running" });
 });
 
-const PORT = 5050;
+const PORT = process.env.PORT || 5050;
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
