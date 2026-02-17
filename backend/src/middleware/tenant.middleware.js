@@ -9,7 +9,7 @@
  * - Host: localhost -> null (no subdomain)
  *
  * Notes:
- * - In local dev, you can simulate via: curl -H "Host: demo-storefront.localhost" ...
+ * - In local dev, simulate via: curl -H "Host: demo-storefront.localhost" ...
  * - We ignore port (e.g., localhost:5051).
  */
 function extractSubdomainFromHost(hostHeader) {
@@ -28,15 +28,28 @@ function extractSubdomainFromHost(hostHeader) {
   return parts[0] || null;
 }
 
+// Reserved subdomains that should never be treated as store slugs
+const RESERVED_SUBDOMAINS = new Set([
+  "api",
+  "www",
+  "admin",
+  "static",
+  "assets",
+  "cdn",
+]);
+
 /**
  * Middleware that sets req.tenant = { slug } if present.
  * It does NOT validate existence in DB (routes will do that).
+ *
+ * Behavior:
+ * - If Host subdomain is reserved, treat as no tenant (req.tenant = null)
  */
 function tenantResolver(req, res, next) {
   const host = req.headers.host;
   const slug = extractSubdomainFromHost(host);
 
-  if (slug) {
+  if (slug && !RESERVED_SUBDOMAINS.has(slug)) {
     req.tenant = { slug };
   } else {
     req.tenant = null;

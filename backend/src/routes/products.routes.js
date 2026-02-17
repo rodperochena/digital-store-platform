@@ -3,11 +3,12 @@
 const express = require("express");
 const { z } = require("zod");
 const { createProduct, listProductsByStore } = require("../db/products.queries");
+const {
+  requireUuidParam,
+  validateBody,
+} = require("../middleware/validate.middleware");
 
 const router = express.Router();
-
-const uuidRegex =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const createProductSchema = z.object({
   title: z.string().min(2).max(200),
@@ -18,55 +19,39 @@ const createProductSchema = z.object({
   delivery_url: z.string().url().optional(),
 });
 
-router.post("/stores/:storeId/products", async (req, res, next) => {
-  try {
-    const { storeId } = req.params;
-
-    if (!uuidRegex.test(storeId)) {
-      return res.status(400).json({
-        error: true,
-        code: "BAD_REQUEST",
-        message: "Invalid store id",
-        path: req.originalUrl,
-      });
+/**
+ * POST /api/stores/:storeId/products
+ */
+router.post(
+  "/stores/:storeId/products",
+  requireUuidParam("storeId"),
+  validateBody(createProductSchema),
+  async (req, res, next) => {
+    try {
+      const { storeId } = req.params;
+      const product = await createProduct(storeId, req.validatedBody);
+      return res.status(201).json({ product });
+    } catch (err) {
+      return next(err);
     }
-
-    const parsed = createProductSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: true,
-        code: "BAD_REQUEST",
-        message: "Invalid request body",
-        issues: parsed.error.issues,
-        path: req.originalUrl,
-      });
-    }
-
-    const product = await createProduct(storeId, parsed.data);
-    return res.status(201).json({ product });
-  } catch (err) {
-    return next(err);
   }
-});
+);
 
-router.get("/stores/:storeId/products", async (req, res, next) => {
-  try {
-    const { storeId } = req.params;
-
-    if (!uuidRegex.test(storeId)) {
-      return res.status(400).json({
-        error: true,
-        code: "BAD_REQUEST",
-        message: "Invalid store id",
-        path: req.originalUrl,
-      });
+/**
+ * GET /api/stores/:storeId/products
+ */
+router.get(
+  "/stores/:storeId/products",
+  requireUuidParam("storeId"),
+  async (req, res, next) => {
+    try {
+      const { storeId } = req.params;
+      const products = await listProductsByStore(storeId);
+      return res.json({ products });
+    } catch (err) {
+      return next(err);
     }
-
-    const products = await listProductsByStore(storeId);
-    return res.json({ products });
-  } catch (err) {
-    return next(err);
   }
-});
+);
 
 module.exports = { productsRouter: router };

@@ -99,10 +99,40 @@ async function createOrder(storeId, { customer_user_id, items }) {
   }
 }
 
+/**
+ * List orders for a store (admin).
+ * Safe default: limit 50 (max 100)
+ */
+async function listOrdersByStore(storeId, { limit = 50 } = {}) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
+
+  const res = await pool.query(
+    `
+    SELECT
+      id,
+      store_id,
+      customer_user_id,
+      status,
+      total_cents,
+      currency,
+      stripe_payment_intent_id,
+      created_at,
+      updated_at
+    FROM orders
+    WHERE store_id = $1
+    ORDER BY created_at DESC
+    LIMIT $2;
+    `,
+    [storeId, safeLimit]
+  );
+
+  return res.rows;
+}
+
 async function getOrderWithItems(storeId, orderId) {
   const orderRes = await pool.query(
     `
-    SELECT id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at
+    SELECT id, store_id, customer_user_id, status, total_cents, currency, stripe_payment_intent_id, created_at, updated_at
     FROM orders
     WHERE store_id = $1 AND id = $2
     LIMIT 1;
@@ -149,7 +179,7 @@ async function getOrderWithItems(storeId, orderId) {
 async function markOrderPaid(storeId, orderId) {
   const currentRes = await pool.query(
     `
-    SELECT id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at
+    SELECT id, store_id, customer_user_id, status, total_cents, currency, stripe_payment_intent_id, created_at, updated_at
     FROM orders
     WHERE store_id = $1 AND id = $2
     LIMIT 1;
@@ -174,17 +204,16 @@ async function markOrderPaid(storeId, orderId) {
     SET status = 'paid',
         updated_at = NOW()
     WHERE store_id = $1 AND id = $2 AND status = 'pending'
-    RETURNING id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at;
+    RETURNING id, store_id, customer_user_id, status, total_cents, currency, stripe_payment_intent_id, created_at, updated_at;
     `,
     [storeId, orderId]
   );
 
-  // If a race happens and status changed between SELECT and UPDATE, be safe:
   const updated = updateRes.rows[0] || null;
   if (!updated) {
     const reread = await pool.query(
       `
-      SELECT id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at
+      SELECT id, store_id, customer_user_id, status, total_cents, currency, stripe_payment_intent_id, created_at, updated_at
       FROM orders
       WHERE store_id = $1 AND id = $2
       LIMIT 1;
@@ -208,67 +237,67 @@ async function markOrderPaid(storeId, orderId) {
  * - If already has different payment_intent_id => CONFLICT
  */
 async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
-    const res = await pool.query(
-      `
-      SELECT id, stripe_payment_intent_id
-      FROM orders
-      WHERE store_id = $1 AND id = $2
-      LIMIT 1;
-      `,
-      [storeId, orderId]
-    );
-  
-    const row = res.rows[0] || null;
-    if (!row) return { kind: "NOT_FOUND" };
-  
-    if (row.stripe_payment_intent_id === paymentIntentId) {
-      return { kind: "OK" };
-    }
-  
-    if (row.stripe_payment_intent_id && row.stripe_payment_intent_id !== paymentIntentId) {
-      return { kind: "CONFLICT" };
-    }
-  
-    await pool.query(
-      `
-      UPDATE orders
-      SET stripe_payment_intent_id = $3,
-          updated_at = NOW()
-      WHERE store_id = $1 AND id = $2 AND stripe_payment_intent_id IS NULL;
-      `,
-      [storeId, orderId, paymentIntentId]
-    );
-  
+  const res = await pool.query(
+    `
+    SELECT id, stripe_payment_intent_id
+    FROM orders
+    WHERE store_id = $1 AND id = $2
+    LIMIT 1;
+    `,
+    [storeId, orderId]
+  );
+
+  const row = res.rows[0] || null;
+  if (!row) return { kind: "NOT_FOUND" };
+
+  if (row.stripe_payment_intent_id === paymentIntentId) {
     return { kind: "OK" };
   }
-  
-  /**
-   * Mark order paid by Stripe PaymentIntent id (webhook-safe).
-   * - Finds order by store_id + payment_intent_id
-   * - Uses same transition rules as markOrderPaid
-   */
-  async function markOrderPaidByPaymentIntent(storeId, paymentIntentId) {
-    const res = await pool.query(
-      `
-      SELECT id
-      FROM orders
-      WHERE store_id = $1 AND stripe_payment_intent_id = $2
-      LIMIT 1;
-      `,
-      [storeId, paymentIntentId]
-    );
-  
-    const row = res.rows[0] || null;
-    if (!row) return { kind: "NOT_FOUND" };
-  
-    return markOrderPaid(storeId, row.id);
+
+  if (row.stripe_payment_intent_id && row.stripe_payment_intent_id !== paymentIntentId) {
+    return { kind: "CONFLICT" };
   }
-  
+
+  await pool.query(
+    `
+    UPDATE orders
+    SET stripe_payment_intent_id = $3,
+        updated_at = NOW()
+    WHERE store_id = $1 AND id = $2 AND stripe_payment_intent_id IS NULL;
+    `,
+    [storeId, orderId, paymentIntentId]
+  );
+
+  return { kind: "OK" };
+}
+
+/**
+ * Mark order paid by Stripe PaymentIntent id (webhook-safe).
+ * - Finds order by store_id + payment_intent_id
+ * - Uses same transition rules as markOrderPaid
+ */
+async function markOrderPaidByPaymentIntent(storeId, paymentIntentId) {
+  const res = await pool.query(
+    `
+    SELECT id
+    FROM orders
+    WHERE store_id = $1 AND stripe_payment_intent_id = $2
+    LIMIT 1;
+    `,
+    [storeId, paymentIntentId]
+  );
+
+  const row = res.rows[0] || null;
+  if (!row) return { kind: "NOT_FOUND" };
+
+  return markOrderPaid(storeId, row.id);
+}
+
 module.exports = {
-    createOrder,
-    getOrderWithItems,
-    markOrderPaid,
-    attachPaymentIntent,
-    markOrderPaidByPaymentIntent,
-  };
-  
+  createOrder,
+  listOrdersByStore,
+  getOrderWithItems,
+  markOrderPaid,
+  attachPaymentIntent,
+  markOrderPaidByPaymentIntent,
+};

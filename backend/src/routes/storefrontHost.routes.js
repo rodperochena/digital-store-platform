@@ -2,39 +2,23 @@
 
 const express = require("express");
 const {
-    getEnabledStoreMetaBySlug,
-    listPublicProductsByStoreSlug,
-    getPublicProductBySlugAndId,
+  getEnabledStoreMetaBySlug,
+  listPublicProductsByStoreSlug,
+  getPublicProductBySlugAndId,
 } = require("../db/storefront.queries");
-  
-  
+
+const { requireTenantSlug } = require("../middleware/storefront.middleware");
+const { requireUuidParam } = require("../middleware/validate.middleware");
 
 const router = express.Router();
-
-function requireTenant(req, res) {
-  const slug = req.tenant?.slug;
-
-  // Must match store slug rules
-  if (!slug || !/^[a-z0-9-]{2,63}$/.test(slug)) {
-    res.status(400).json({
-      error: true,
-      code: "BAD_REQUEST",
-      message: "Missing or invalid tenant subdomain",
-    });
-    return null;
-  }
-
-  return slug;
-}
 
 /**
  * GET /api/storefront/meta
  * Tenant comes from Host subdomain
  */
-router.get("/storefront/meta", async (req, res, next) => {
+router.get("/storefront/meta", requireTenantSlug, async (req, res, next) => {
   try {
-    const slug = requireTenant(req, res);
-    if (!slug) return;
+    const slug = req.storeSlug;
 
     const store = await getEnabledStoreMetaBySlug(slug);
     if (!store) {
@@ -42,6 +26,7 @@ router.get("/storefront/meta", async (req, res, next) => {
         error: true,
         code: "NOT_FOUND",
         message: "Store not found",
+        path: req.originalUrl,
       });
     }
 
@@ -54,10 +39,9 @@ router.get("/storefront/meta", async (req, res, next) => {
 /**
  * GET /api/storefront/products
  */
-router.get("/storefront/products", async (req, res, next) => {
+router.get("/storefront/products", requireTenantSlug, async (req, res, next) => {
   try {
-    const slug = requireTenant(req, res);
-    if (!slug) return;
+    const slug = req.storeSlug;
 
     const store = await getEnabledStoreMetaBySlug(slug);
     if (!store) {
@@ -65,6 +49,7 @@ router.get("/storefront/products", async (req, res, next) => {
         error: true,
         code: "NOT_FOUND",
         message: "Store not found",
+        path: req.originalUrl,
       });
     }
 
@@ -78,36 +63,30 @@ router.get("/storefront/products", async (req, res, next) => {
 /**
  * GET /api/storefront/products/:productId
  */
-router.get("/storefront/products/:productId", async (req, res, next) => {
-  try {
-    const slug = requireTenant(req, res);
-    if (!slug) return;
+router.get(
+  "/storefront/products/:productId",
+  requireTenantSlug,
+  requireUuidParam("productId"),
+  async (req, res, next) => {
+    try {
+      const slug = req.storeSlug;
+      const { productId } = req.params;
 
-    const productId = String(req.params.productId || "").trim();
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const product = await getPublicProductBySlugAndId(slug, productId);
+      if (!product) {
+        return res.status(404).json({
+          error: true,
+          code: "NOT_FOUND",
+          message: "Product not found",
+          path: req.originalUrl,
+        });
+      }
 
-    if (!uuidRegex.test(productId)) {
-      return res.status(400).json({
-        error: true,
-        code: "BAD_REQUEST",
-        message: "Invalid product id",
-      });
+      return res.json({ product });
+    } catch (err) {
+      return next(err);
     }
-
-    const product = await getPublicProductBySlugAndId(slug, productId);
-    if (!product) {
-      return res.status(404).json({
-        error: true,
-        code: "NOT_FOUND",
-        message: "Product not found",
-      });
-    }
-
-    return res.json({ product });
-  } catch (err) {
-    return next(err);
   }
-});
+);
 
 module.exports = { storefrontHostRouter: router };
