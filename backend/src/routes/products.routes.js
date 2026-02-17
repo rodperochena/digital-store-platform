@@ -23,13 +23,22 @@ router.post("/stores/:storeId/products", async (req, res, next) => {
     const { storeId } = req.params;
 
     if (!uuidRegex.test(storeId)) {
-      return res.status(400).json({ error: { message: "Invalid store id" } });
+      return res.status(400).json({
+        error: true,
+        code: "BAD_REQUEST",
+        message: "Invalid store id",
+        path: req.originalUrl,
+      });
     }
 
     const parsed = createProductSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
-        error: { message: "Invalid request body", issues: parsed.error.issues },
+        error: true,
+        code: "BAD_REQUEST",
+        message: "Invalid request body",
+        issues: parsed.error.issues,
+        path: req.originalUrl,
       });
     }
 
@@ -45,7 +54,12 @@ router.get("/stores/:storeId/products", async (req, res, next) => {
     const { storeId } = req.params;
 
     if (!uuidRegex.test(storeId)) {
-      return res.status(400).json({ error: { message: "Invalid store id" } });
+      return res.status(400).json({
+        error: true,
+        code: "BAD_REQUEST",
+        message: "Invalid store id",
+        path: req.originalUrl,
+      });
     }
 
     const products = await listProductsByStore(storeId);

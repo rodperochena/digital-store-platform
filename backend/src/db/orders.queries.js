@@ -3,19 +3,41 @@
 const { pool } = require("./pool");
 
 /**
+ * Normalize items:
+ * - Merge duplicate product_id lines by summing quantities.
+ * - Keeps deterministic order by first appearance.
+ */
+function normalizeItems(items) {
+  const map = new Map();
+  for (const it of items) {
+    const prev = map.get(it.product_id);
+    if (!prev) {
+      map.set(it.product_id, { product_id: it.product_id, quantity: it.quantity });
+    } else {
+      prev.quantity += it.quantity;
+    }
+  }
+  return Array.from(map.values());
+}
+
+/**
  * Creates an order + items in a single transaction.
- * - Validates products belong to the same store
+ * - Validates products belong to the store
  * - Computes total from DB prices (DB is source of truth)
+ * - Snapshots unit_price_cents into order_items
  */
 async function createOrder(storeId, { customer_user_id, items }) {
   const client = await pool.connect();
 
+  // Defensive: normalize duplicates in case frontend sends repeated product_ids.
+  const normalizedItems = normalizeItems(items);
+
   try {
     await client.query("BEGIN");
 
-    // 1) Load product prices from DB, ensure they belong to store
-    const productIds = items.map((it) => it.product_id);
+    const productIds = normalizedItems.map((it) => it.product_id);
 
+    // Load prices for products that belong to this store
     const productsRes = await client.query(
       `
       SELECT id, price_cents
@@ -25,12 +47,10 @@ async function createOrder(storeId, { customer_user_id, items }) {
       [storeId, productIds]
     );
 
-    const productsMap = new Map(
-      productsRes.rows.map((p) => [p.id, p.price_cents])
-    );
+    const productsMap = new Map(productsRes.rows.map((p) => [p.id, p.price_cents]));
 
     // Ensure every requested product exists for this store
-    for (const it of items) {
+    for (const it of normalizedItems) {
       if (!productsMap.has(it.product_id)) {
         const err = new Error("One or more products not found for this store");
         err.statusCode = 400;
@@ -38,14 +58,14 @@ async function createOrder(storeId, { customer_user_id, items }) {
       }
     }
 
-    // 2) Compute total
+    // Compute total
     let totalCents = 0;
-    for (const it of items) {
+    for (const it of normalizedItems) {
       const unitPrice = productsMap.get(it.product_id);
       totalCents += unitPrice * it.quantity;
     }
 
-    // 3) Create order
+    // Create order
     const orderRes = await client.query(
       `
       INSERT INTO orders (store_id, customer_user_id, status, total_cents, currency)
@@ -57,8 +77,8 @@ async function createOrder(storeId, { customer_user_id, items }) {
 
     const order = orderRes.rows[0];
 
-    // 4) Create order_items (snapshot unit_price_cents)
-    for (const it of items) {
+    // Create order_items (snapshot unit_price_cents)
+    for (const it of normalizedItems) {
       const unitPrice = productsMap.get(it.product_id);
       await client.query(
         `
@@ -80,7 +100,6 @@ async function createOrder(storeId, { customer_user_id, items }) {
 }
 
 async function getOrderWithItems(storeId, orderId) {
-  // Ensure order belongs to store
   const orderRes = await pool.query(
     `
     SELECT id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at
@@ -115,17 +134,141 @@ async function getOrderWithItems(storeId, orderId) {
   return { order, items: itemsRes.rows };
 }
 
+/**
+ * Transition an order to "paid".
+ * Rules:
+ * - pending -> paid allowed
+ * - already paid: idempotent OK
+ * - failed/refunded: blocked
+ *
+ * Return shape:
+ * - { kind: "OK", order }
+ * - { kind: "NOT_FOUND" }
+ * - { kind: "INVALID_STATE", status }
+ */
 async function markOrderPaid(storeId, orderId) {
-  const sql = `
+  const currentRes = await pool.query(
+    `
+    SELECT id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at
+    FROM orders
+    WHERE store_id = $1 AND id = $2
+    LIMIT 1;
+    `,
+    [storeId, orderId]
+  );
+
+  const current = currentRes.rows[0] || null;
+  if (!current) return { kind: "NOT_FOUND" };
+
+  if (current.status === "paid") {
+    return { kind: "OK", order: current };
+  }
+
+  if (current.status !== "pending") {
+    return { kind: "INVALID_STATE", status: current.status };
+  }
+
+  const updateRes = await pool.query(
+    `
     UPDATE orders
     SET status = 'paid',
         updated_at = NOW()
-    WHERE store_id = $1 AND id = $2
+    WHERE store_id = $1 AND id = $2 AND status = 'pending'
     RETURNING id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at;
-  `;
+    `,
+    [storeId, orderId]
+  );
 
-  const result = await pool.query(sql, [storeId, orderId]);
-  return result.rows[0] || null;
+  // If a race happens and status changed between SELECT and UPDATE, be safe:
+  const updated = updateRes.rows[0] || null;
+  if (!updated) {
+    const reread = await pool.query(
+      `
+      SELECT id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at
+      FROM orders
+      WHERE store_id = $1 AND id = $2
+      LIMIT 1;
+      `,
+      [storeId, orderId]
+    );
+    const now = reread.rows[0] || null;
+    if (!now) return { kind: "NOT_FOUND" };
+    if (now.status === "paid") return { kind: "OK", order: now };
+    return { kind: "INVALID_STATE", status: now.status };
+  }
+
+  return { kind: "OK", order: updated };
 }
 
-module.exports = { createOrder, getOrderWithItems, markOrderPaid };
+/**
+ * Attach a Stripe PaymentIntent id to an order.
+ * Rules:
+ * - Order must exist and belong to store
+ * - If already has same payment_intent_id => OK (idempotent)
+ * - If already has different payment_intent_id => CONFLICT
+ */
+async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
+    const res = await pool.query(
+      `
+      SELECT id, stripe_payment_intent_id
+      FROM orders
+      WHERE store_id = $1 AND id = $2
+      LIMIT 1;
+      `,
+      [storeId, orderId]
+    );
+  
+    const row = res.rows[0] || null;
+    if (!row) return { kind: "NOT_FOUND" };
+  
+    if (row.stripe_payment_intent_id === paymentIntentId) {
+      return { kind: "OK" };
+    }
+  
+    if (row.stripe_payment_intent_id && row.stripe_payment_intent_id !== paymentIntentId) {
+      return { kind: "CONFLICT" };
+    }
+  
+    await pool.query(
+      `
+      UPDATE orders
+      SET stripe_payment_intent_id = $3,
+          updated_at = NOW()
+      WHERE store_id = $1 AND id = $2 AND stripe_payment_intent_id IS NULL;
+      `,
+      [storeId, orderId, paymentIntentId]
+    );
+  
+    return { kind: "OK" };
+  }
+  
+  /**
+   * Mark order paid by Stripe PaymentIntent id (webhook-safe).
+   * - Finds order by store_id + payment_intent_id
+   * - Uses same transition rules as markOrderPaid
+   */
+  async function markOrderPaidByPaymentIntent(storeId, paymentIntentId) {
+    const res = await pool.query(
+      `
+      SELECT id
+      FROM orders
+      WHERE store_id = $1 AND stripe_payment_intent_id = $2
+      LIMIT 1;
+      `,
+      [storeId, paymentIntentId]
+    );
+  
+    const row = res.rows[0] || null;
+    if (!row) return { kind: "NOT_FOUND" };
+  
+    return markOrderPaid(storeId, row.id);
+  }
+  
+module.exports = {
+    createOrder,
+    getOrderWithItems,
+    markOrderPaid,
+    attachPaymentIntent,
+    markOrderPaidByPaymentIntent,
+  };
+  

@@ -2,7 +2,17 @@
 
 const express = require("express");
 const { z } = require("zod");
-const { createStore, enableStore } = require("../db/stores.queries");
+const {
+  createStore,
+  enableStore,
+  getStoreSettings,
+  updateStoreSettings,
+} = require("../db/stores.queries");
+
+const {
+  requireUuidParam,
+  validateBody,
+} = require("../middleware/validate.middleware");
 
 const router = express.Router();
 
@@ -15,19 +25,23 @@ const createStoreSchema = z.object({
   name: z.string().min(2).max(100),
 });
 
-router.post("/stores", async (req, res, next) => {
-  try {
-    const parsed = createStoreSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: {
-          message: "Invalid request body",
-          issues: parsed.error.issues,
-        },
-      });
-    }
+const updateStoreSettingsSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  currency: z.string().min(3).max(10).optional(),
+  primary_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "primary_color must be a hex color like #RRGGBB")
+    .optional(),
+  logo_url: z.string().url().optional(),
+});
 
-    const store = await createStore(parsed.data);
+/**
+ * POST /api/stores
+ * Creates a new store (is_enabled defaults to false).
+ */
+router.post("/stores", validateBody(createStoreSchema), async (req, res, next) => {
+  try {
+    const store = await createStore(req.validatedBody);
     return res.status(201).json({ store });
   } catch (err) {
     return next(err);
@@ -35,36 +49,88 @@ router.post("/stores", async (req, res, next) => {
 });
 
 /**
- * Enable store (set is_enabled = true)
  * PATCH /api/stores/:id/enable
+ * Enable store (set is_enabled = true).
  */
-router.patch("/stores/:id/enable", async (req, res, next) => {
-  try {
-    const storeId = req.params.id;
+router.patch(
+  "/stores/:id/enable",
+  requireUuidParam("id"),
+  async (req, res, next) => {
+    try {
+      const storeId = req.params.id;
 
-    // Basic UUID format validation
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const store = await enableStore(storeId);
+      if (!store) {
+        return res.status(404).json({
+          error: true,
+          code: "NOT_FOUND",
+          message: "Store not found",
+          path: req.originalUrl,
+        });
+      }
 
-    if (!uuidRegex.test(storeId)) {
-      return res.status(400).json({
-        error: { message: "Invalid store id" },
-      });
+      return res.json({ store });
+    } catch (err) {
+      return next(err);
     }
-
-    const store = await enableStore(storeId);
-
-    if (!store) {
-      return res.status(404).json({
-        error: { message: "Store not found" },
-      });
-    }
-
-    return res.json({ store });
-  } catch (err) {
-    return next(err);
   }
-});
+);
+
+/**
+ * GET /api/stores/:id/settings
+ * Returns store settings/branding fields (admin use).
+ */
+router.get(
+  "/stores/:id/settings",
+  requireUuidParam("id"),
+  async (req, res, next) => {
+    try {
+      const storeId = req.params.id;
+
+      const store = await getStoreSettings(storeId);
+      if (!store) {
+        return res.status(404).json({
+          error: true,
+          code: "NOT_FOUND",
+          message: "Store not found",
+          path: req.originalUrl,
+        });
+      }
+
+      return res.json({ store });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+/**
+ * PATCH /api/stores/:id/settings
+ * Updates store settings/branding fields (admin use).
+ */
+router.patch(
+  "/stores/:id/settings",
+  requireUuidParam("id"),
+  validateBody(updateStoreSettingsSchema),
+  async (req, res, next) => {
+    try {
+      const storeId = req.params.id;
+
+      const updated = await updateStoreSettings(storeId, req.validatedBody);
+      if (!updated) {
+        return res.status(404).json({
+          error: true,
+          code: "NOT_FOUND",
+          message: "Store not found",
+          path: req.originalUrl,
+        });
+      }
+
+      return res.json({ store: updated });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
 
 module.exports = { storesRouter: router };
-
