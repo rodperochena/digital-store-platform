@@ -57,14 +57,14 @@ async function createOrder(storeId, { customer_user_id, items }) {
       throw err;
     }
 
-    const storeCurrency = store.currency || "usd";
+    const storeCurrency = String(store.currency || "usd").toLowerCase();
 
     const productIds = normalizedItems.map((it) => it.product_id);
 
     // Load prices for products that belong to this store
     const productsRes = await client.query(
       `
-      SELECT id, price_cents
+      SELECT id, price_cents, currency
       FROM products
       WHERE store_id = $1 AND id = ANY($2::uuid[]);
       `,
@@ -72,22 +72,36 @@ async function createOrder(storeId, { customer_user_id, items }) {
     );
 
     const rows = productsRes.rows || [];
-    const productsMap = new Map(rows.map((p) => [p.id, p.price_cents]));
+    const productsMap = new Map(
+        rows.map((p) => [
+          p.id,
+          {
+            price_cents: p.price_cents,
+            currency: String(p.currency || "").toLowerCase(),
+          },
+        ])
+      );
 
     // Ensure every requested product exists for this store
     for (const it of normalizedItems) {
-      if (!productsMap.has(it.product_id)) {
-        const err = new Error("One or more products not found for this store");
-        err.statusCode = 400;
-        throw err;
-      }
+        const prod = productsMap.get(it.product_id);
+        if (!prod) {
+          const err = new Error("One or more products not found for this store");
+          err.statusCode = 400;
+          throw err;
+        }
+        if (prod.currency && prod.currency !== String(storeCurrency).toLowerCase()) {
+          const err = new Error("Product currency mismatch for this store");
+          err.statusCode = 409;
+          throw err;
+        }
     }
 
     // Compute total (DB prices only)
     let totalCents = 0;
     for (const it of normalizedItems) {
-      const unitPrice = productsMap.get(it.product_id);
-      totalCents += unitPrice * it.quantity;
+        const unitPrice = productsMap.get(it.product_id).price_cents;
+        totalCents += unitPrice * it.quantity;
     }
 
     // Create order
@@ -104,7 +118,7 @@ async function createOrder(storeId, { customer_user_id, items }) {
 
     // Create order_items (snapshot unit_price_cents)
     for (const it of normalizedItems) {
-      const unitPrice = productsMap.get(it.product_id);
+        const unitPrice = productsMap.get(it.product_id).price_cents;
       await client.query(
         `
         INSERT INTO order_items (order_id, product_id, quantity, unit_price_cents)

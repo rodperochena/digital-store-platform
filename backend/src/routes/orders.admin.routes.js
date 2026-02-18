@@ -3,7 +3,6 @@
 const express = require("express");
 const { z } = require("zod");
 const {
-  createOrder,
   listOrdersByStore,
   getOrderWithItems,
   markOrderPaid,
@@ -12,69 +11,51 @@ const {
 } = require("../db/orders.queries");
 
 const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
+const { requireAdminKey } = require("../middleware/admin.middleware");
 
 const router = express.Router();
-
-/**
- * NOTE:
- * We intentionally allow duplicate product_id lines here.
- * The DB layer normalizes/merges duplicates defensively (normalizeItems).
- */
-const createOrderSchema = z.object({
-  customer_user_id: z.string().uuid().optional(),
-  items: z
-    .array(
-      z.object({
-        product_id: z.string().uuid(),
-        quantity: z.number().int().positive(),
-      })
-    )
-    .min(1, "items must have at least 1 item"),
-});
 
 const paymentIntentSchema = z.object({
   stripe_payment_intent_id: z.string().min(5).max(200),
 });
 
 /**
- * POST /api/stores/:storeId/orders
- */
-router.post(
-  "/stores/:storeId/orders",
-  requireUuidParam("storeId"),
-  validateBody(createOrderSchema),
-  async (req, res, next) => {
-    try {
-      const { storeId } = req.params;
-      const order = await createOrder(storeId, req.validatedBody);
-      return res.status(201).json({ order });
-    } catch (err) {
-      return next(err);
-    }
-  }
-);
-
-/**
  * GET /api/stores/:storeId/orders
- * Admin listing
- * Optional query: ?limit=50 (max 100)
  */
 router.get(
-  "/stores/:storeId/orders",
-  requireUuidParam("storeId"),
-  async (req, res, next) => {
-    try {
-      const { storeId } = req.params;
-
-      const orders = await listOrdersByStore(storeId, {
-        limit: req.query.limit,
-      });
-
-      return res.json({ orders });
-    } catch (err) {
-      return next(err);
+    "/stores/:storeId/orders",
+    requireUuidParam("storeId"),
+    async (req, res, next) => {
+      try {
+        const { storeId } = req.params;
+  
+        const raw = req.query.limit;
+        const rawStr = Array.isArray(raw) ? raw[0] : raw;
+  
+        let safeLimit;
+        if (rawStr !== undefined) {
+          const n = Number(rawStr);
+  
+          // must be a positive integer
+          if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+            return res.status(400).json({
+              error: true,
+              code: "BAD_REQUEST",
+              message: "limit must be a positive integer",
+              path: req.originalUrl,
+            });
+          }
+  
+          // clamp 1..100
+          safeLimit = Math.min(n, 100);
+        }
+  
+        const orders = await listOrdersByStore(storeId, { limit: safeLimit });
+        return res.json({ orders });
+      } catch (err) {
+        return next(err);
+      }
     }
-  }
 );
 
 /**
@@ -87,8 +68,8 @@ router.get(
   async (req, res, next) => {
     try {
       const { storeId, orderId } = req.params;
-
       const result = await getOrderWithItems(storeId, orderId);
+
       if (!result) {
         return res.status(404).json({
           error: true,
@@ -107,7 +88,6 @@ router.get(
 
 /**
  * PATCH /api/stores/:storeId/orders/:orderId/mark-paid
- * Temporary simulation endpoint (until Stripe webhook integration)
  */
 router.patch(
   "/stores/:storeId/orders/:orderId/mark-paid",
@@ -116,7 +96,6 @@ router.patch(
   async (req, res, next) => {
     try {
       const { storeId, orderId } = req.params;
-
       const result = await markOrderPaid(storeId, orderId);
 
       if (result.kind === "NOT_FOUND") {
@@ -179,6 +158,7 @@ router.patch(
           path: req.originalUrl,
         });
       }
+
       if (result.kind === "CONFLICT_PI_IN_USE") {
         return res.status(409).json({
           error: true,
@@ -188,6 +168,7 @@ router.patch(
           path: req.originalUrl,
         });
       }
+
       return res.json({ ok: true });
     } catch (err) {
       return next(err);
@@ -236,4 +217,4 @@ router.patch(
   }
 );
 
-module.exports = { ordersRouter: router };
+module.exports = { ordersAdminRouter: router };
