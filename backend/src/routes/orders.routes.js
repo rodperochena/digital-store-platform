@@ -179,7 +179,15 @@ router.patch(
           path: req.originalUrl,
         });
       }
-
+      if (result.kind === "CONFLICT_PI_IN_USE") {
+        return res.status(409).json({
+          error: true,
+          code: "CONFLICT",
+          message:
+            "That stripe_payment_intent_id is already attached to another order in this store",
+          path: req.originalUrl,
+        });
+      }
       return res.json({ ok: true });
     } catch (err) {
       return next(err);

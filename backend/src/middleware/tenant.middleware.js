@@ -12,6 +12,9 @@
  * - In local dev, simulate via: curl -H "Host: demo-storefront.localhost" ...
  * - We ignore port (e.g., localhost:5051).
  */
+
+const { RESERVED_TENANT_SLUGS } = require("../config/tenancy.constants");
+
 function extractSubdomainFromHost(hostHeader) {
   if (!hostHeader) return null;
 
@@ -28,16 +31,6 @@ function extractSubdomainFromHost(hostHeader) {
   return parts[0] || null;
 }
 
-// Reserved subdomains that should never be treated as store slugs
-const RESERVED_SUBDOMAINS = new Set([
-  "api",
-  "www",
-  "admin",
-  "static",
-  "assets",
-  "cdn",
-]);
-
 /**
  * Middleware that sets req.tenant = { slug } if present.
  * It does NOT validate existence in DB (routes will do that).
@@ -46,16 +39,22 @@ const RESERVED_SUBDOMAINS = new Set([
  * - If Host subdomain is reserved, treat as no tenant (req.tenant = null)
  */
 function tenantResolver(req, res, next) {
-  const host = req.headers.host;
-  const slug = extractSubdomainFromHost(host);
-
-  if (slug && !RESERVED_SUBDOMAINS.has(slug)) {
+    const host = req.headers.host;
+    const slug = extractSubdomainFromHost(host);
+  
+    if (!slug) {
+      req.tenant = null;
+      return next();
+    }
+  
+    if (RESERVED_TENANT_SLUGS.has(slug)) {
+      // keep a structured signal so storefront middleware can show a clearer error
+      req.tenant = { slug: null, reserved: true, raw: slug };
+      return next();
+    }
+  
     req.tenant = { slug };
-  } else {
-    req.tenant = null;
-  }
-
-  return next();
-}
+    return next();
+  }  
 
 module.exports = { tenantResolver, extractSubdomainFromHost };

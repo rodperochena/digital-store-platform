@@ -1,13 +1,9 @@
 "use strict";
 
-const SLUG_REGEX = /^[a-z0-9-]{2,63}$/;
-
-// Reserved hostnames that must NEVER map to a tenant store.
-const RESERVED_SLUGS = new Set(["api", "www", "admin"]);
-
-function isValidSlug(slug) {
-  return SLUG_REGEX.test(slug);
-}
+const {
+    RESERVED_TENANT_SLUGS,
+    isValidTenantSlug,
+  } = require("../config/tenancy.constants");  
 
 /**
  * Validates a route param slug (e.g., /store/:subdomain/*)
@@ -17,7 +13,7 @@ function requireSlugParam(paramName) {
   return (req, res, next) => {
     const slug = String(req.params?.[paramName] || "").trim().toLowerCase();
 
-    if (!isValidSlug(slug) || RESERVED_SLUGS.has(slug)) {
+    if (!isValidTenantSlug(slug) || RESERVED_TENANT_SLUGS.has(slug)) {
       return res.status(400).json({
         error: true,
         code: "BAD_REQUEST",
@@ -35,9 +31,29 @@ function requireSlugParam(paramName) {
  * Requires req.tenant.slug (from Host-based routing) and attaches req.storeSlug.
  */
 function requireTenantSlug(req, res, next) {
-    const raw = String(req.tenant?.slug || "").trim().toLowerCase();
+    // tenantResolver sets:
+    // - null when no subdomain
+    // - { slug:null, reserved:true, raw } when reserved
+    // - { slug } when valid-looking subdomain exists
+    if (!req.tenant) {
+      return res.status(400).json({
+        error: true,
+        code: "BAD_REQUEST",
+        message: "Missing tenant subdomain",
+        path: req.originalUrl,
+      });
+    }
   
-    // If tenantResolver intentionally set null (reserved), raw will be ""
+    if (req.tenant.reserved === true) {
+      return res.status(400).json({
+        error: true,
+        code: "BAD_REQUEST",
+        message: "Reserved subdomain cannot be used as store",
+        path: req.originalUrl,
+      });
+    }
+  
+    const raw = String(req.tenant?.slug || "").trim().toLowerCase();
     if (!raw) {
       return res.status(400).json({
         error: true,
@@ -47,7 +63,7 @@ function requireTenantSlug(req, res, next) {
       });
     }
   
-    if (!isValidSlug(raw)) {
+    if (!isValidTenantSlug(raw)) {
       return res.status(400).json({
         error: true,
         code: "BAD_REQUEST",
@@ -56,7 +72,7 @@ function requireTenantSlug(req, res, next) {
       });
     }
   
-    if (RESERVED_SLUGS.has(raw)) {
+    if (RESERVED_TENANT_SLUGS.has(raw)) {
       return res.status(400).json({
         error: true,
         code: "BAD_REQUEST",
@@ -68,5 +84,5 @@ function requireTenantSlug(req, res, next) {
     req.storeSlug = raw;
     return next();
 }
-  
-module.exports = { requireSlugParam, requireTenantSlug, RESERVED_SLUGS };
+
+module.exports = { requireSlugParam, requireTenantSlug };

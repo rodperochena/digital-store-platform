@@ -6,8 +6,12 @@ const { pool } = require("./pool");
  * Normalize items:
  * - Merge duplicate product_id lines by summing quantities.
  * - Keeps deterministic order by first appearance.
+ *
+ * Defensive: returns [] if items is not an array (should not happen due to Zod).
  */
 function normalizeItems(items) {
+  if (!Array.isArray(items)) return [];
+
   const map = new Map();
   for (const it of items) {
     const prev = map.get(it.product_id);
@@ -35,6 +39,26 @@ async function createOrder(storeId, { customer_user_id, items }) {
   try {
     await client.query("BEGIN");
 
+    // Load store currency (DB is source of truth)
+    const storeRes = await client.query(
+      `
+      SELECT currency
+      FROM stores
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [storeId]
+    );
+
+    const store = storeRes.rows[0] || null;
+    if (!store) {
+      const err = new Error("Store not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const storeCurrency = store.currency || "usd";
+
     const productIds = normalizedItems.map((it) => it.product_id);
 
     // Load prices for products that belong to this store
@@ -47,7 +71,8 @@ async function createOrder(storeId, { customer_user_id, items }) {
       [storeId, productIds]
     );
 
-    const productsMap = new Map(productsRes.rows.map((p) => [p.id, p.price_cents]));
+    const rows = productsRes.rows || [];
+    const productsMap = new Map(rows.map((p) => [p.id, p.price_cents]));
 
     // Ensure every requested product exists for this store
     for (const it of normalizedItems) {
@@ -58,7 +83,7 @@ async function createOrder(storeId, { customer_user_id, items }) {
       }
     }
 
-    // Compute total
+    // Compute total (DB prices only)
     let totalCents = 0;
     for (const it of normalizedItems) {
       const unitPrice = productsMap.get(it.product_id);
@@ -69,10 +94,10 @@ async function createOrder(storeId, { customer_user_id, items }) {
     const orderRes = await client.query(
       `
       INSERT INTO orders (store_id, customer_user_id, status, total_cents, currency)
-      VALUES ($1, $2, 'pending', $3, 'usd')
+      VALUES ($1, $2, 'pending', $3, $4)
       RETURNING id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at;
       `,
-      [storeId, customer_user_id ?? null, totalCents]
+      [storeId, customer_user_id ?? null, totalCents, storeCurrency]
     );
 
     const order = orderRes.rows[0];
@@ -169,7 +194,7 @@ async function getOrderWithItems(storeId, orderId) {
  * Rules:
  * - pending -> paid allowed
  * - already paid: idempotent OK
- * - failed/refunded: blocked
+ * - other states blocked
  *
  * Return shape:
  * - { kind: "OK", order }
@@ -211,6 +236,7 @@ async function markOrderPaid(storeId, orderId) {
 
   const updated = updateRes.rows[0] || null;
   if (!updated) {
+    // race-safe reread
     const reread = await pool.query(
       `
       SELECT id, store_id, customer_user_id, status, total_cents, currency, stripe_payment_intent_id, created_at, updated_at
@@ -220,6 +246,7 @@ async function markOrderPaid(storeId, orderId) {
       `,
       [storeId, orderId]
     );
+
     const now = reread.rows[0] || null;
     if (!now) return { kind: "NOT_FOUND" };
     if (now.status === "paid") return { kind: "OK", order: now };
@@ -235,6 +262,8 @@ async function markOrderPaid(storeId, orderId) {
  * - Order must exist and belong to store
  * - If already has same payment_intent_id => OK (idempotent)
  * - If already has different payment_intent_id => CONFLICT
+ *
+ * NOTE: A later hardening step should enforce PaymentIntent uniqueness per store.
  */
 async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
   const res = await pool.query(
@@ -257,6 +286,22 @@ async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
   if (row.stripe_payment_intent_id && row.stripe_payment_intent_id !== paymentIntentId) {
     return { kind: "CONFLICT" };
   }
+  // Defensive: ensure this payment intent isn't already attached to another order in this store
+  const dupRes = await pool.query(
+    `
+    SELECT id
+    FROM orders
+    WHERE store_id = $1
+      AND stripe_payment_intent_id = $2
+      AND id <> $3
+    LIMIT 1;
+    `,
+    [storeId, paymentIntentId, orderId]
+  );
+
+  if (dupRes.rows[0]) {
+    return { kind: "CONFLICT_PI_IN_USE" };
+  }
 
   await pool.query(
     `
@@ -275,6 +320,8 @@ async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
  * Mark order paid by Stripe PaymentIntent id (webhook-safe).
  * - Finds order by store_id + payment_intent_id
  * - Uses same transition rules as markOrderPaid
+ *
+ * NOTE: A later hardening step should enforce PaymentIntent uniqueness per store.
  */
 async function markOrderPaidByPaymentIntent(storeId, paymentIntentId) {
   const res = await pool.query(
