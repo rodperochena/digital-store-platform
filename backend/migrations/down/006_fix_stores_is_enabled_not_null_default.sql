@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TABLE stores
+  ALTER COLUMN is_enabled DROP NOT NULL;
+
+ALTER TABLE stores
+  ALTER COLUMN is_enabled DROP DEFAULT;
+
+COMMIT;

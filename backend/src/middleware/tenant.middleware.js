@@ -1,35 +1,54 @@
 "use strict";
 
-/**
- * Extracts tenant slug from the Host header subdomain.
- *
- * Examples (with TENANCY_BASE_DOMAIN):
- * - base=localhost: demo.localhost -> "demo"
- * - base=example.com: demo.example.com -> "demo"
- * - example.com -> null (no tenant)
- * - foo.bar.example.com -> null (strict)
- *
- * Notes:
- * - In local dev, simulate via: curl -H "Host: demo.localhost" ...
- * - We ignore port (e.g., localhost:5051).
- */
-
 const { RESERVED_TENANT_SLUGS } = require("../config/tenancy.constants");
 
 const TENANCY_BASE_DOMAIN = String(process.env.TENANCY_BASE_DOMAIN || "")
   .trim()
   .toLowerCase();
 
+// Keep consistent with your store slug rules (you mentioned: lowercase letters, numbers, hyphens)
+const TENANT_SLUG_RE = /^[a-z0-9-]+$/;
+
+function stripPort(hostHeader) {
+  if (!hostHeader) return "";
+
+  const raw = String(hostHeader).trim().toLowerCase();
+  if (!raw) return "";
+
+  // IPv6 literal format: [::1]:5051
+  if (raw.startsWith("[")) {
+    const end = raw.indexOf("]");
+    if (end === -1) return "";
+    return raw.slice(0, end + 1); // keep [::1]
+  }
+
+  // Normal host:port
+  return raw.split(":")[0].trim();
+}
+
+function isIpLiteral(host) {
+  if (!host) return false;
+
+  // IPv4
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+
+  // IPv6 literal comes like "[::1]"
+  if (host.startsWith("[") && host.endsWith("]")) return true;
+
+  return false;
+}
+
 function extractSubdomainFromHost(hostHeader) {
   if (!hostHeader) return null;
 
-  // Remove port
-  const host = String(hostHeader).split(":")[0].toLowerCase();
+  const host = stripPort(hostHeader);
+  if (!host) return null;
 
   // If it's an IPv4/IPv6 literal, no subdomain concept here
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes("]")) return null;
+  if (isIpLiteral(host)) return null;
 
   // If a base domain is configured, only accept hosts that end with it.
+  // Strict: only one label allowed before the base domain.
   if (TENANCY_BASE_DOMAIN) {
     const base = TENANCY_BASE_DOMAIN;
 
@@ -44,25 +63,34 @@ function extractSubdomainFromHost(hostHeader) {
     // Strict: only a single label allowed before the base domain
     if (prefix.includes(".")) return null;
 
+    // Enforce slug format
+    if (!TENANT_SLUG_RE.test(prefix)) return null;
+
     return prefix;
   }
 
   // Fallback (no base domain configured):
-  // Only treat as a tenant if there are 3+ labels (prevents example.com -> "example").
+  // Require 3+ labels so "example.com" does not map to tenant "example".
   const parts = host.split(".").filter(Boolean);
   if (parts.length < 3) return null;
 
-  return parts[0] || null;
+  const candidate = parts[0] || null;
+  if (!candidate) return null;
+
+  if (!TENANT_SLUG_RE.test(candidate)) return null;
+
+  return candidate;
 }
 
 /**
- * Middleware that sets req.tenant = { slug } if present.
- * It does NOT validate existence in DB (routes will do that).
+ * Middleware that sets req.tenant based on Host subdomain.
  *
  * Behavior:
- * - If no tenant: req.tenant = null
- * - If reserved tenant: req.tenant = { slug:null, reserved:true, raw }
- * - Else: req.tenant = { slug }
+ * - If no subdomain tenant => req.tenant = null
+ * - If reserved subdomain => req.tenant = { slug:null, reserved:true, raw }
+ * - Else => req.tenant = { slug }
+ *
+ * NOTE: This does NOT validate existence in DB (routes do that).
  */
 function tenantResolver(req, res, next) {
   const host = req.headers.host;
@@ -73,7 +101,7 @@ function tenantResolver(req, res, next) {
     return next();
   }
 
-  if (RESERVED_TENANT_SLUGS.has(slug)) {
+  if (RESERVED_TENANT_SLUGS && RESERVED_TENANT_SLUGS.has(slug)) {
     req.tenant = { slug: null, reserved: true, raw: slug };
     return next();
   }
@@ -82,4 +110,7 @@ function tenantResolver(req, res, next) {
   return next();
 }
 
-module.exports = { tenantResolver, extractSubdomainFromHost };
+module.exports = {
+  tenantResolver,
+  extractSubdomainFromHost,
+};

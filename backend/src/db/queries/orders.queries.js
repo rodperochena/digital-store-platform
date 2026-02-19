@@ -24,9 +24,12 @@ async function createOrder(storeId, { customer_user_id, items }) {
   try {
     await client.query("BEGIN");
 
+    // IMPORTANT:
+    // - Public contract: if store does not exist OR is disabled => return null (public will respond 404)
+    // - Do not leak internal enabled/disabled state via public API.
     const storeRes = await client.query(
       `
-      SELECT currency
+      SELECT currency, is_enabled
       FROM stores
       WHERE id = $1
       LIMIT 1;
@@ -36,9 +39,12 @@ async function createOrder(storeId, { customer_user_id, items }) {
 
     const store = storeRes.rows[0] || null;
     if (!store) {
-      const err = new Error("Store not found");
-      err.statusCode = 404;
-      throw err;
+      await client.query("ROLLBACK");
+      return null;
+    }
+    if (store.is_enabled !== true) {
+      await client.query("ROLLBACK");
+      return null;
     }
 
     const storeCurrency = String(store.currency || "usd").toLowerCase();
@@ -57,7 +63,10 @@ async function createOrder(storeId, { customer_user_id, items }) {
     const productsMap = new Map(
       rows.map((p) => [
         p.id,
-        { price_cents: p.price_cents, currency: String(p.currency || "").toLowerCase() },
+        {
+          price_cents: p.price_cents,
+          currency: String(p.currency || "").toLowerCase(),
+        },
       ])
     );
 
@@ -92,6 +101,7 @@ async function createOrder(storeId, { customer_user_id, items }) {
 
     const order = orderRes.rows[0];
 
+    // MVP ok: loop inserts. (Later: bulk insert for scale.)
     for (const it of normalizedItems) {
       const unitPrice = productsMap.get(it.product_id).price_cents;
       await client.query(
@@ -266,19 +276,27 @@ async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
   if (dupRes.rows[0]) return { kind: "CONFLICT_PI_IN_USE" };
 
   // Try to attach (race-safe)
-  const upd = await pool.query(
-    `
-    UPDATE orders
-    SET stripe_payment_intent_id = $3,
-        updated_at = NOW()
-    WHERE store_id = $1
-      AND id = $2
-      AND stripe_payment_intent_id IS NULL;
-    `,
-    [storeId, orderId, pi]
-  );
-
-  if (upd.rowCount === 1) return { kind: "OK" };
+  try {
+    const upd = await pool.query(
+      `
+      UPDATE orders
+      SET stripe_payment_intent_id = $3,
+          updated_at = NOW()
+      WHERE store_id = $1
+        AND id = $2
+        AND stripe_payment_intent_id IS NULL;
+      `,
+      [storeId, orderId, pi]
+    );
+  
+    if (upd.rowCount === 1) return { kind: "OK" };
+  } catch (err) {
+    // Unique index: uniq_orders_store_payment_intent
+    if (err && err.code === "23505") {
+      return { kind: "CONFLICT_PI_IN_USE" };
+    }
+    throw err;
+  }
 
   // Someone else may have updated between our read and update → re-read
   const reread = await pool.query(
@@ -320,8 +338,27 @@ async function markOrderPaidByPaymentIntent(storeId, paymentIntentId) {
   return markOrderPaid(storeId, row.id);
 }
 
+async function resolveEnabledStoreIdBySlug(slug) {
+  const s = String(slug || "").trim().toLowerCase();
+  if (!s) return null;
+
+  const res = await pool.query(
+    `
+    SELECT id
+    FROM stores
+    WHERE slug = $1
+      AND is_enabled = true
+    LIMIT 1;
+    `,
+    [s]
+  );
+
+  return res.rows[0]?.id ?? null;
+}
+
 module.exports = {
   createOrder,
+  resolveEnabledStoreIdBySlug,
   listOrdersByStore,
   getOrderWithItems,
   markOrderPaid,

@@ -11,6 +11,7 @@ const { pool } = require("../pool");
 async function getEnabledStoreMetaBySlug(slug) {
   const sql = `
     SELECT
+      id,
       slug,
       name,
       currency,
