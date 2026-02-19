@@ -8,10 +8,9 @@ const {
   markOrderPaid,
   attachPaymentIntent,
   markOrderPaidByPaymentIntent,
-} = require("../db/orders.queries");
+} = require("../db/queries/orders.queries");
 
 const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
-const { requireAdminKey } = require("../middleware/admin.middleware");
 
 const router = express.Router();
 

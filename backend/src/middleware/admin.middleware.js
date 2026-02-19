@@ -8,11 +8,11 @@ function jsonError(req, res, status, code, message) {
     code,
     message,
     path: req.originalUrl,
+    request_id: req.id || null,
   });
 }
 
 // Constant-time compare via hashing to avoid length-based timing differences.
-// (timingSafeEqual throws if buffers differ in length, hashing makes lengths equal.)
 function constantTimeEquals(a, b) {
   const ah = crypto.createHash("sha256").update(String(a)).digest();
   const bh = crypto.createHash("sha256").update(String(b)).digest();
@@ -21,21 +21,21 @@ function constantTimeEquals(a, b) {
 
 function requireAdminKey(req, res, next) {
   const expected = String(process.env.ADMIN_KEY || "").trim();
+  const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";
 
-  // Misconfiguration: middleware enabled but no ADMIN_KEY configured
   if (!expected) {
+    // In prod, keep message generic
     return jsonError(
       req,
       res,
       500,
       "INTERNAL",
-      "Server misconfigured: missing ADMIN_KEY"
+      isProd ? "Internal server error" : "Server misconfigured: missing ADMIN_KEY"
     );
   }
 
   const provided = String(req.get("x-admin-key") || "").trim();
 
-  // Missing or invalid key (return same response to avoid leaking info)
   if (!provided || !constantTimeEquals(provided, expected)) {
     return jsonError(req, res, 401, "UNAUTHORIZED", "Unauthorized");
   }
@@ -44,4 +44,3 @@ function requireAdminKey(req, res, next) {
 }
 
 module.exports = { requireAdminKey };
-

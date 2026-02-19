@@ -3,10 +3,6 @@
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/**
- * Validates a req.params[paramName] as UUID.
- * If invalid, returns 400 with consistent error format.
- */
 function requireUuidParam(paramName) {
   return (req, res, next) => {
     const value = String(req.params?.[paramName] || "").trim();
@@ -16,16 +12,13 @@ function requireUuidParam(paramName) {
         code: "BAD_REQUEST",
         message: `Invalid ${paramName}`,
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
     return next();
   };
 }
 
-/**
- * Validates request body using a Zod schema.
- * Attaches issues to response consistently.
- */
 function validateBody(schema) {
   return (req, res, next) => {
     const parsed = schema.safeParse(req.body);
@@ -36,6 +29,7 @@ function validateBody(schema) {
         message: "Invalid request body",
         issues: parsed.error.issues,
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
     req.validatedBody = parsed.data;

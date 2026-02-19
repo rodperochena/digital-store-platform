@@ -1,6 +1,6 @@
 "use strict";
 
-const { pool } = require("./pool");
+const { pool } = require("../pool");
 
 /**
  * Public store meta by slug, only if enabled.

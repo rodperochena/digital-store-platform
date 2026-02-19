@@ -5,7 +5,7 @@ const {
   getEnabledStoreMetaBySlug,
   listPublicProductsByStoreSlug,
   getPublicProductBySlugAndId,
-} = require("../db/storefront.queries");
+} = require("../db/queries/storefront.queries");
 
 const { requireSlugParam } = require("../middleware/storefront.middleware");
 const { requireUuidParam } = require("../middleware/validate.middleware");

@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { z } = require("zod");
-const { createProduct, listProductsByStore } = require("../db/products.queries");
+const { createProduct, listProductsByStore } = require("../db/queries/products.queries");
 const {
   requireUuidParam,
   validateBody,

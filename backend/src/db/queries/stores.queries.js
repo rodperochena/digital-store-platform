@@ -1,14 +1,18 @@
 "use strict";
 
-const { pool } = require("./pool");
+const { pool } = require("../pool");
 
-async function createStore({ slug, name }) {
+async function createStore({ slug, name, currency }) {
+  const normalizedCurrency =
+    currency != null ? String(currency).trim().toLowerCase() : null;
+
   const sql = `
-    INSERT INTO stores (slug, name)
-    VALUES ($1, $2)
-    RETURNING id, slug, name, is_enabled, created_at, updated_at;
+    INSERT INTO stores (slug, name, currency)
+    VALUES ($1, $2, COALESCE($3, 'usd'))
+    RETURNING id, slug, name, currency, is_enabled, created_at, updated_at;
   `;
-  const result = await pool.query(sql, [slug, name]);
+
+  const result = await pool.query(sql, [slug, name, normalizedCurrency]);
   return result.rows[0];
 }
 

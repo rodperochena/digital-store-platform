@@ -21,8 +21,8 @@ apiRouter.use(storefrontRouter);
 apiRouter.use(storefrontHostRouter);
 apiRouter.use(ordersPublicRouter);
 
-// Admin APIs
-apiRouter.use(requireAdminKey);
+// Admin APIs (protect everything under /stores/*)
+apiRouter.use("/stores", requireAdminKey);
 apiRouter.use(storesRouter);
 apiRouter.use(productsRouter);
 apiRouter.use(ordersAdminRouter);

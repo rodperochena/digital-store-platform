@@ -2,17 +2,16 @@
 
 const express = require("express");
 const { z } = require("zod");
+
+const { RESERVED_TENANT_SLUGS, SLUG_REGEX } = require("../config/tenancy.constants");
 const {
   createStore,
   enableStore,
   getStoreSettings,
   updateStoreSettings,
-} = require("../db/stores.queries");
+} = require("../db/queries/stores.queries");
 
-const {
-  requireUuidParam,
-  validateBody,
-} = require("../middleware/validate.middleware");
+const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
 
 const router = express.Router();
 
@@ -21,8 +20,12 @@ const createStoreSchema = z.object({
     .string()
     .min(2)
     .max(63)
-    .regex(/^[a-z0-9-]+$/, "slug must be lowercase letters, numbers, or hyphens"),
+    .regex(SLUG_REGEX, "slug must be lowercase letters, numbers, or hyphens")
+    .refine((s) => !RESERVED_TENANT_SLUGS.has(String(s).toLowerCase()), {
+      message: "slug is reserved",
+    }),
   name: z.string().min(2).max(100),
+  currency: z.string().min(3).max(10).optional(),
 });
 
 const updateStoreSettingsSchema = z.object({
@@ -52,57 +55,49 @@ router.post("/stores", validateBody(createStoreSchema), async (req, res, next) =
  * PATCH /api/stores/:id/enable
  * Enable store (set is_enabled = true).
  */
-router.patch(
-  "/stores/:id/enable",
-  requireUuidParam("id"),
-  async (req, res, next) => {
-    try {
-      const storeId = req.params.id;
+router.patch("/stores/:id/enable", requireUuidParam("id"), async (req, res, next) => {
+  try {
+    const storeId = req.params.id;
 
-      const store = await enableStore(storeId);
-      if (!store) {
-        return res.status(404).json({
-          error: true,
-          code: "NOT_FOUND",
-          message: "Store not found",
-          path: req.originalUrl,
-        });
-      }
-
-      return res.json({ store });
-    } catch (err) {
-      return next(err);
+    const store = await enableStore(storeId);
+    if (!store) {
+      return res.status(404).json({
+        error: true,
+        code: "NOT_FOUND",
+        message: "Store not found",
+        path: req.originalUrl,
+      });
     }
+
+    return res.json({ store });
+  } catch (err) {
+    return next(err);
   }
-);
+});
 
 /**
  * GET /api/stores/:id/settings
  * Returns store settings/branding fields (admin use).
  */
-router.get(
-  "/stores/:id/settings",
-  requireUuidParam("id"),
-  async (req, res, next) => {
-    try {
-      const storeId = req.params.id;
+router.get("/stores/:id/settings", requireUuidParam("id"), async (req, res, next) => {
+  try {
+    const storeId = req.params.id;
 
-      const store = await getStoreSettings(storeId);
-      if (!store) {
-        return res.status(404).json({
-          error: true,
-          code: "NOT_FOUND",
-          message: "Store not found",
-          path: req.originalUrl,
-        });
-      }
-
-      return res.json({ store });
-    } catch (err) {
-      return next(err);
+    const store = await getStoreSettings(storeId);
+    if (!store) {
+      return res.status(404).json({
+        error: true,
+        code: "NOT_FOUND",
+        message: "Store not found",
+        path: req.originalUrl,
+      });
     }
+
+    return res.json({ store });
+  } catch (err) {
+    return next(err);
   }
-);
+});
 
 /**
  * PATCH /api/stores/:id/settings

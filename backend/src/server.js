@@ -5,13 +5,15 @@ const cors = require("cors");
 const { apiRouter } = require("./routes");
 const { notFoundHandler, errorHandler } = require("./middleware/error.middleware");
 const { tenantResolver } = require("./middleware/tenant.middleware");
+const { requestId } = require("./middleware/requestId.middleware");
 
 const app = express();
 
 app.use(cors());
+app.use(requestId);
 app.use(express.json());
-
 app.use(tenantResolver);
+
 app.use("/api", apiRouter);
 
 app.use(notFoundHandler);

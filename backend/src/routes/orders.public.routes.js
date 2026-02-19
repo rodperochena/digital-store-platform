@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { z } = require("zod");
-const { createOrder } = require("../db/orders.queries");
+const { createOrder } = require("../db/queries/orders.queries");
 const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
 
 const router = express.Router();
