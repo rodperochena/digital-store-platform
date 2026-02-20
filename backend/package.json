@@ -4,16 +4,15 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-  "start": "node server.js",
-  "dev": "node --watch server.js",
-
-  "migrate": "node scripts/migrate.js",
-  "migrate:up": "node scripts/migrate.js up",
-  "migrate:status": "node scripts/migrate.js status",
-
-  "test": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand",
-  "test:watch": "NODE_ENV=test jest --watch",
-  "test:ci": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "migrate": "node scripts/migrate.js",
+    "migrate:up": "node scripts/migrate.js up",
+    "migrate:status": "node scripts/migrate.js status",
+    "test": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "test:ci": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand",
+    "test:docker": "bash scripts/test_db_docker.sh"
   },
   "keywords": [],
   "author": "",
@@ -34,6 +33,6 @@
     "supertest": "^7.2.2"
   },
   "overrides": {
-  "minimatch": "^10.2.1"
+    "minimatch": "^10.2.1"
   }
 }
