@@ -3,6 +3,7 @@
 const express = require("express");
 const { z } = require("zod");
 const { createProduct, listProductsByStore } = require("../db/queries/products.queries");
+const { requireAdminKey } = require("../middleware/admin.middleware");
 const {
   requireUuidParam,
   validateBody,
@@ -24,6 +25,7 @@ const createProductSchema = z.object({
  */
 router.post(
   "/stores/:storeId/products",
+  requireAdminKey,
   requireUuidParam("storeId"),
   validateBody(createProductSchema),
   async (req, res, next) => {
@@ -42,6 +44,7 @@ router.post(
  */
 router.get(
   "/stores/:storeId/products",
+  requireAdminKey,
   requireUuidParam("storeId"),
   async (req, res, next) => {
     try {
