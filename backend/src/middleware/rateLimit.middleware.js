@@ -2,7 +2,7 @@
 
 const rateLimit = require("express-rate-limit");
 
-// express-rate-limit v7 helper (IPv6-safe). Falls back for older versions.
+// express-rate-limit v7+ helper (IPv6-safe). Falls back for older versions.
 const ipKeyGenerator =
   typeof rateLimit.ipKeyGenerator === "function"
     ? rateLimit.ipKeyGenerator
@@ -11,7 +11,7 @@ const ipKeyGenerator =
 function getTenantId(req) {
   return String(
     (req.tenant && req.tenant.slug) ||
-      (req.params && req.params.slug) ||
+      (req.params && (req.params.slug || req.params.storeSlug)) ||
       (req.params && req.params.storeId) ||
       "public"
   )
@@ -27,10 +27,7 @@ function tenantKey(req /*, res */) {
 }
 
 function isTrue(v) {
-  return String(v || "")
-    .trim()
-    .toLowerCase()
-    .match(/^(1|true|yes|on)$/);
+  return /^(1|true|yes|on)$/i.test(String(v || "").trim());
 }
 
 function json429(req, message) {
@@ -39,21 +36,26 @@ function json429(req, message) {
     code: "RATE_LIMITED",
     message: message || "Too many requests",
     path: req.originalUrl,
+    request_id: req.id || null,
   };
 }
 
 // ---- Env knobs ----
 // General public traffic (meta/products)
-const RL_PUBLIC_DISABLED = isTrue(process.env.RL_PUBLIC_DISABLED);
+// Back-compat: CI currently uses PUBLIC_ORDERS_RATE_LIMIT_DISABLED :contentReference[oaicite:1]{index=1}
+const RL_PUBLIC_DISABLED = isTrue(
+  process.env.RL_PUBLIC_DISABLED || process.env.PUBLIC_ORDERS_RATE_LIMIT_DISABLED
+);
 const RL_PUBLIC_WINDOW_MS = Number(process.env.RL_PUBLIC_WINDOW_MS) || 60_000;
 const RL_PUBLIC_MAX = Number(process.env.RL_PUBLIC_MAX) || 300;
 
 // Checkout / order creation (stricter)
 const RL_CHECKOUT_DISABLED = isTrue(process.env.RL_CHECKOUT_DISABLED);
-const RL_CHECKOUT_WINDOW_MS = Number(process.env.RL_CHECKOUT_WINDOW_MS) || 60_000;
+const RL_CHECKOUT_WINDOW_MS =
+  Number(process.env.RL_CHECKOUT_WINDOW_MS) || 60_000;
 const RL_CHECKOUT_MAX = Number(process.env.RL_CHECKOUT_MAX) || 30;
 
-const noop = (req, res, next) => next();
+const noop = (_req, _res, next) => next();
 
 const publicLimiter = RL_PUBLIC_DISABLED
   ? noop
@@ -73,7 +75,8 @@ const publicLimiter = RL_PUBLIC_DISABLED
 
         return false;
       },
-      handler: (req, res) => res.status(429).json(json429(req, "Too many requests")),
+      handler: (req, res) =>
+        res.status(429).json(json429(req, "Too many requests")),
     });
 
 const checkoutLimiter = RL_CHECKOUT_DISABLED
@@ -86,7 +89,9 @@ const checkoutLimiter = RL_CHECKOUT_DISABLED
       keyGenerator: tenantKey,
       skip: (req) => req.method === "OPTIONS",
       handler: (req, res) =>
-        res.status(429).json(json429(req, "Too many checkout attempts. Try again later.")),
+        res
+          .status(429)
+          .json(json429(req, "Too many checkout attempts. Try again later.")),
     });
 
 module.exports = { publicLimiter, checkoutLimiter };

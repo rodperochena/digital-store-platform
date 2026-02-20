@@ -13,8 +13,16 @@ function isLocalDevOrigin(origin) {
   try {
     const u = new URL(origin);
     const host = (u.hostname || "").toLowerCase();
-    return host === "localhost" || host === "127.0.0.1" || host === "::1";
-  } catch {
+    return (
+        host === "localhost" ||
+        host.endsWith(".localhost") || // important for multi-tenant local dev (a.localhost)
+        host === "127.0.0.1" ||
+        host === "::1" ||
+        host === "lvh.me" ||
+        host.endsWith(".lvh.me")
+      );      
+  } 
+    catch {
     return false;
   }
 }

@@ -12,6 +12,7 @@ const {
 } = require("../db/queries/stores.queries");
 
 const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
+const { requireAdminKey } = require("../middleware/admin.middleware");
 
 const router = express.Router();
 
@@ -42,77 +43,34 @@ const updateStoreSettingsSchema = z.object({
  * POST /api/stores
  * Creates a new store (is_enabled defaults to false).
  */
-router.post("/stores", validateBody(createStoreSchema), async (req, res, next) => {
-  try {
-    const store = await createStore(req.validatedBody);
-    return res.status(201).json({ store });
-  } catch (err) {
-    return next(err);
+router.post(
+  "/stores",
+  requireAdminKey,
+  validateBody(createStoreSchema),
+  async (req, res, next) => {
+    try {
+      const store = await createStore(req.validatedBody);
+      return res.status(201).json({ store });
+    } catch (err) {
+      return next(err);
+    }
   }
-});
+);
 
 /**
  * PATCH /api/stores/:id/enable
  * Enable store (set is_enabled = true).
  */
-router.patch("/stores/:id/enable", requireUuidParam("id"), async (req, res, next) => {
-  try {
-    const storeId = req.params.id;
-
-    const store = await enableStore(storeId);
-    if (!store) {
-      return res.status(404).json({
-        error: true,
-        code: "NOT_FOUND",
-        message: "Store not found",
-        path: req.originalUrl,
-      });
-    }
-
-    return res.json({ store });
-  } catch (err) {
-    return next(err);
-  }
-});
-
-/**
- * GET /api/stores/:id/settings
- * Returns store settings/branding fields (admin use).
- */
-router.get("/stores/:id/settings", requireUuidParam("id"), async (req, res, next) => {
-  try {
-    const storeId = req.params.id;
-
-    const store = await getStoreSettings(storeId);
-    if (!store) {
-      return res.status(404).json({
-        error: true,
-        code: "NOT_FOUND",
-        message: "Store not found",
-        path: req.originalUrl,
-      });
-    }
-
-    return res.json({ store });
-  } catch (err) {
-    return next(err);
-  }
-});
-
-/**
- * PATCH /api/stores/:id/settings
- * Updates store settings/branding fields (admin use).
- */
 router.patch(
-  "/stores/:id/settings",
+  "/stores/:id/enable",
+  requireAdminKey,
   requireUuidParam("id"),
-  validateBody(updateStoreSettingsSchema),
   async (req, res, next) => {
     try {
       const storeId = req.params.id;
 
-      const updated = await updateStoreSettings(storeId, req.validatedBody);
-      if (!updated) {
+      const store = await enableStore(storeId);
+      if (!store) {
         return res.status(404).json({
           error: true,
           code: "NOT_FOUND",
@@ -121,7 +79,66 @@ router.patch(
         });
       }
 
-      return res.json({ store: updated });
+      return res.json({ store });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+/**
+ * GET /api/stores/:id/settings
+ * Returns store settings/branding fields (admin use).
+ */
+router.get(
+  "/stores/:id/settings",
+  requireAdminKey,
+  requireUuidParam("id"),
+  async (req, res, next) => {
+    try {
+      const storeId = req.params.id;
+
+      const store = await getStoreSettings(storeId);
+      if (!store) {
+        return res.status(404).json({
+          error: true,
+          code: "NOT_FOUND",
+          message: "Store not found",
+          path: req.originalUrl,
+        });
+      }
+
+      return res.json({ store });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+/**
+ * PATCH /api/stores/:id/settings
+ * Updates store settings/branding fields (admin use).
+ */
+router.patch(
+  "/stores/:id/settings",
+  requireAdminKey,
+  requireUuidParam("id"),
+  validateBody(updateStoreSettingsSchema),
+  async (req, res, next) => {
+    try {
+      const storeId = req.params.id;
+
+      const store = await updateStoreSettings(storeId, req.validatedBody);
+      if (!store) {
+        return res.status(404).json({
+          error: true,
+          code: "NOT_FOUND",
+          message: "Store not found",
+          path: req.originalUrl,
+        });
+      }
+
+      return res.json({ store });
     } catch (err) {
       return next(err);
     }

@@ -23,7 +23,11 @@ function shouldUseSsl(databaseUrl) {
 }
 
 const useSsl = shouldUseSsl(DATABASE_URL);
-if (process.env.NODE_ENV !== "production") {
+const shouldLogDbConfig =
+  String(process.env.DB_LOG || "") === "1" ||
+  String(process.env.NODE_ENV || "").toLowerCase() === "development";
+
+if (shouldLogDbConfig) {
   console.log("[db] ssl:", useSsl, "DATABASE_SSL:", process.env.DATABASE_SSL || "(auto)");
 }
 

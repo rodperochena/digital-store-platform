@@ -11,6 +11,7 @@ const {
 } = require("../db/queries/orders.queries");
 
 const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
+const { requireAdminKey } = require("../middleware/admin.middleware");
 
 const router = express.Router();
 
@@ -22,39 +23,40 @@ const paymentIntentSchema = z.object({
  * GET /api/stores/:storeId/orders
  */
 router.get(
-    "/stores/:storeId/orders",
-    requireUuidParam("storeId"),
-    async (req, res, next) => {
-      try {
-        const { storeId } = req.params;
-  
-        const raw = req.query.limit;
-        const rawStr = Array.isArray(raw) ? raw[0] : raw;
-  
-        let safeLimit;
-        if (rawStr !== undefined) {
-          const n = Number(rawStr);
-  
-          // must be a positive integer
-          if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
-            return res.status(400).json({
-              error: true,
-              code: "BAD_REQUEST",
-              message: "limit must be a positive integer",
-              path: req.originalUrl,
-            });
-          }
-  
-          // clamp 1..100
-          safeLimit = Math.min(n, 100);
+  "/stores/:storeId/orders",
+  requireAdminKey,
+  requireUuidParam("storeId"),
+  async (req, res, next) => {
+    try {
+      const { storeId } = req.params;
+
+      const raw = req.query.limit;
+      const rawStr = Array.isArray(raw) ? raw[0] : raw;
+
+      let safeLimit;
+      if (rawStr !== undefined) {
+        const n = Number(rawStr);
+
+        // must be a positive integer
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+          return res.status(400).json({
+            error: true,
+            code: "BAD_REQUEST",
+            message: "limit must be a positive integer",
+            path: req.originalUrl,
+          });
         }
-  
-        const orders = await listOrdersByStore(storeId, { limit: safeLimit });
-        return res.json({ orders });
-      } catch (err) {
-        return next(err);
+
+        // clamp 1..100
+        safeLimit = Math.min(n, 100);
       }
+
+      const orders = await listOrdersByStore(storeId, { limit: safeLimit });
+      return res.json({ orders });
+    } catch (err) {
+      return next(err);
     }
+  }
 );
 
 /**
@@ -62,6 +64,7 @@ router.get(
  */
 router.get(
   "/stores/:storeId/orders/:orderId",
+  requireAdminKey,
   requireUuidParam("storeId"),
   requireUuidParam("orderId"),
   async (req, res, next) => {
@@ -90,6 +93,7 @@ router.get(
  */
 router.patch(
   "/stores/:storeId/orders/:orderId/mark-paid",
+  requireAdminKey,
   requireUuidParam("storeId"),
   requireUuidParam("orderId"),
   async (req, res, next) => {
@@ -127,6 +131,7 @@ router.patch(
  */
 router.patch(
   "/stores/:storeId/orders/:orderId/attach-payment-intent",
+  requireAdminKey,
   requireUuidParam("storeId"),
   requireUuidParam("orderId"),
   validateBody(paymentIntentSchema),
@@ -180,6 +185,7 @@ router.patch(
  */
 router.patch(
   "/stores/:storeId/orders/mark-paid-by-payment-intent",
+  requireAdminKey,
   requireUuidParam("storeId"),
   validateBody(paymentIntentSchema),
   async (req, res, next) => {

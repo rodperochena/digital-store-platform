@@ -47,5 +47,5 @@ jobs:
           DATABASE_SSL: "false"
           ADMIN_KEY: "ci_admin_key"
           TRUST_PROXY: "0"
-          PUBLIC_ORDERS_RATE_LIMIT_DISABLED: "1"
+          RL_PUBLIC_DISABLED: "1"
         run: npm test

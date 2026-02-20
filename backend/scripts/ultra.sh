@@ -160,7 +160,11 @@ json_pretty() {
 
 json_get() {
   local expr="$1"
-  if [ "${HAVE_JQ}" = "1" ] && echo "${BODY}" | jq -e "${expr}" >/dev/null 2>&1; then
+
+  # IMPORTANT:
+  # jq -e returns exit 1 for "false", so we must not use jq -e "${expr}" directly.
+  # We only want to fail when the value is null/missing, not when it's false/0/"".
+  if [ "${HAVE_JQ}" = "1" ] && echo "${BODY}" | jq -e "(${expr}) != null" >/dev/null 2>&1; then
     echo "${BODY}" | jq -r "${expr}"
   else
     echo ""
@@ -211,10 +215,17 @@ assert_code_in() {
 
 assert_not_200() {
   local msg="$1"
+
+  if [ "${CURL_EXIT}" != "0" ]; then
+    fail "${msg}: curl failed (exit ${CURL_EXIT}). Got HTTP ${CODE}. [${LAST_METHOD} ${LAST_URL}]"
+    return 1
+  fi
+
   if [ "${CODE}" != "200" ]; then
     pass "${msg} (got ${CODE}, not 200)"
     return 0
   fi
+
   fail "${msg}: expected NOT 200, got 200 [${LAST_METHOD} ${LAST_URL}]"
   return 1
 }
@@ -516,9 +527,19 @@ fi
 ############################################
 # 1) Health
 ############################################
-section "HEALTH"
+section "HEALTH (PREFLIGHT)"
 call GET "${BASE}/health"
-assert_code 200 "/health should return 200" || true
+
+if [ "${CURL_EXIT}" != "0" ]; then
+  echo
+  echo "❌ Server unreachable at: ${BASE}"
+  echo "   Start it in another terminal:"
+  echo "   cd backend && PORT=5051 ADMIN_KEY=supersecret123 node server.js"
+  echo
+  exit 2
+fi
+
+assert_code 200 "/health should return 200" || exit 2
 json_pretty
 
 ############################################
@@ -578,7 +599,8 @@ echo "A_ID=${A_ID}  A_SLUG=${A_SLUG}"
 echo "B_ID=${B_ID}  B_SLUG=${B_SLUG}"
 
 if [ -z "${A_ID}" ] || [ -z "${B_ID}" ]; then
-  fail "Store IDs are missing; downstream tests may fail. Check ADMIN_KEY and server logs."
+  fail "Store IDs are missing; cannot continue. Check ADMIN_KEY, BASE, and server logs."
+  exit 3
 fi
 
 ############################################
@@ -693,6 +715,10 @@ call POST "${BASE}/stores" \
 assert_code 201 "Create store C (leave disabled)" || true
 C_ID="$(json_get '.store.id')"
 echo "C_ID=${C_ID}  C_SLUG=${C_SLUG}"
+
+call GET "${BASE}/stores/${C_ID}/settings" -H "x-admin-key: ${ADMIN_KEY}"
+assert_code 200 "Get store C settings (admin)" || true
+assert_json_eq '.store.is_enabled' 'false' "Store C is_enabled should be false" || true
 
 call GET "${BASE}/storefront/meta" -H "Host: ${C_SLUG}.localhost"
 assert_not_200 "Disabled store C: /storefront/meta must NOT return 200" || true

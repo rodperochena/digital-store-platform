@@ -19,6 +19,7 @@ function requireSlugParam(paramName) {
         code: "BAD_REQUEST",
         message: `Invalid ${paramName}`,
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
 
@@ -41,6 +42,7 @@ function requireTenantSlug(req, res, next) {
         code: "BAD_REQUEST",
         message: "Missing tenant subdomain",
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
   
@@ -50,6 +52,7 @@ function requireTenantSlug(req, res, next) {
         code: "BAD_REQUEST",
         message: "Reserved subdomain cannot be used as store",
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
   
@@ -60,6 +63,7 @@ function requireTenantSlug(req, res, next) {
         code: "BAD_REQUEST",
         message: "Missing tenant subdomain",
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
   
@@ -69,6 +73,7 @@ function requireTenantSlug(req, res, next) {
         code: "BAD_REQUEST",
         message: "Invalid tenant subdomain",
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
   
@@ -78,6 +83,7 @@ function requireTenantSlug(req, res, next) {
         code: "BAD_REQUEST",
         message: "Reserved subdomain cannot be used as store",
         path: req.originalUrl,
+        request_id: req.id || null,
       });
     }
   

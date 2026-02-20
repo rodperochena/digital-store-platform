@@ -1,0 +1,7 @@
+BEGIN;
+
+UPDATE stores SET is_enabled = FALSE WHERE is_enabled IS NULL;
+ALTER TABLE stores ALTER COLUMN is_enabled SET DEFAULT FALSE;
+ALTER TABLE stores ALTER COLUMN is_enabled SET NOT NULL;
+
+COMMIT;

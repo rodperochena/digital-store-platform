@@ -1,7 +1,7 @@
 "use strict";
 
 // IMPORTANT: Load .env BEFORE any imports that read env vars (like src/db/pool.js)
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 
 process.env.NODE_ENV = "test";
 process.env.ADMIN_KEY = process.env.ADMIN_KEY || "test_admin_key";
