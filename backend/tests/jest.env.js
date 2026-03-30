@@ -8,5 +8,5 @@ process.env.ADMIN_KEY = process.env.ADMIN_KEY || "test_admin_key";
 process.env.TENANCY_BASE_DOMAIN = process.env.TENANCY_BASE_DOMAIN || "localhost";
 
 // Optional: disable rate limiting in tests (only if your middleware reads these flags)
-process.env.PUBLIC_RATE_LIMIT_DISABLED = process.env.PUBLIC_RATE_LIMIT_DISABLED || "1";
-process.env.CHECKOUT_RATE_LIMIT_DISABLED = process.env.CHECKOUT_RATE_LIMIT_DISABLED || "1";
+process.env.RL_PUBLIC_DISABLED = process.env.RL_PUBLIC_DISABLED || "1";
+process.env.RL_CHECKOUT_DISABLED = process.env.RL_CHECKOUT_DISABLED || "1";

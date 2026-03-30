@@ -2,21 +2,19 @@
 
 const express = require("express");
 const { z } = require("zod");
+
 const { createProduct, listProductsByStore } = require("../db/queries/products.queries");
-const {
-  requireUuidParam,
-  validateBody,
-} = require("../middleware/validate.middleware");
+const { requireUuidParam, validateBody } = require("../middleware/validate.middleware");
+const { requireAdminKey } = require("../middleware/admin.middleware");
 
 const router = express.Router();
 
 const createProductSchema = z.object({
-  title: z.string().min(2).max(200),
+  title: z.string().min(1).max(120),
   description: z.string().max(5000).optional(),
-  price_cents: z.number().int().nonnegative(),
-  currency: z.string().min(3).max(10).optional(),
-  is_active: z.boolean().optional(),
+  price_cents: z.number().int().positive(),
   delivery_url: z.string().url().optional(),
+  is_active: z.boolean().optional(),
 });
 
 /**
@@ -24,6 +22,7 @@ const createProductSchema = z.object({
  */
 router.post(
   "/stores/:storeId/products",
+  requireAdminKey,
   requireUuidParam("storeId"),
   validateBody(createProductSchema),
   async (req, res, next) => {
@@ -42,6 +41,7 @@ router.post(
  */
 router.get(
   "/stores/:storeId/products",
+  requireAdminKey,
   requireUuidParam("storeId"),
   async (req, res, next) => {
     try {

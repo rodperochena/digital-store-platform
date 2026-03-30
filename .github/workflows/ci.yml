@@ -48,4 +48,5 @@ jobs:
           ADMIN_KEY: "ci_admin_key"
           TRUST_PROXY: "0"
           RL_PUBLIC_DISABLED: "1"
+          RL_CHECKOUT_DISABLED: "1"
         run: npm test
