@@ -266,6 +266,17 @@ router.post("/logout", requireOwnerSession, async (req, res, next) => {
   }
 });
 
+// ── GET /api/owner/account ────────────────────────────────────────────────────
+
+router.get("/account", requireOwnerSession, async (req, res, next) => {
+  try {
+    const account = await getOwnerAccount(req.ownerStoreId);
+    return res.json({ account: account ?? {} });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // ── GET /api/owner/session ────────────────────────────────────────────────────
 
 router.get("/session", requireOwnerSession, async (req, res, next) => {

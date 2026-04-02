@@ -106,10 +106,26 @@ export default function OwnerSettings() {
           <div className={styles.row2}>
             <div className={styles.field}>
               <label className={styles.label} htmlFor="currency">Currency</label>
-              <input id="currency" type="text" className={styles.input}
+              <select id="currency" className={styles.input}
                 value={currency} onChange={(e) => setCurrency(e.target.value)}
-                placeholder="USD" disabled={loading} maxLength={10}
-                autoComplete="off" spellCheck={false} />
+                disabled={loading}>
+                <option value="usd">USD – US Dollar</option>
+                <option value="eur">EUR – Euro</option>
+                <option value="gbp">GBP – British Pound</option>
+                <option value="cad">CAD – Canadian Dollar</option>
+                <option value="aud">AUD – Australian Dollar</option>
+                <option value="jpy">JPY – Japanese Yen</option>
+                <option value="chf">CHF – Swiss Franc</option>
+                <option value="sgd">SGD – Singapore Dollar</option>
+                <option value="nzd">NZD – New Zealand Dollar</option>
+                <option value="inr">INR – Indian Rupee</option>
+                <option value="brl">BRL – Brazilian Real</option>
+                <option value="mxn">MXN – Mexican Peso</option>
+                <option value="hkd">HKD – Hong Kong Dollar</option>
+                <option value="nok">NOK – Norwegian Krone</option>
+                <option value="sek">SEK – Swedish Krona</option>
+                <option value="dkk">DKK – Danish Krone</option>
+              </select>
               <span className={styles.hint}>Cannot change after products exist.</span>
             </div>
 

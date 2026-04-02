@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useOwner } from "../../context/OwnerContext";
 import Spinner from "../../components/Spinner";
-import { fetchOwnerStats, listOwnerOrders } from "../../api/owner";
+import { fetchOwnerStats, listOwnerOrders, getOwnerAccount } from "../../api/owner";
 import styles from "./Dashboard.module.css";
 
 function formatRevenue(cents, currency) {
@@ -38,6 +38,7 @@ export default function OwnerDashboard() {
 
   const [stats, setStats]               = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [firstName, setFirstName]       = useState(null);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
 
@@ -46,9 +47,10 @@ export default function OwnerDashboard() {
 
     async function load() {
       try {
-        const [statsData, ordersData] = await Promise.all([
+        const [statsData, ordersData, accountData] = await Promise.all([
           fetchOwnerStats(ownerCtx),
           listOwnerOrders(ownerCtx).catch(() => ({ orders: [] })),
+          getOwnerAccount(ownerCtx).catch(() => ({ account: {} })),
         ]);
         if (!cancelled) {
           setStats(statsData.stats);
@@ -57,6 +59,7 @@ export default function OwnerDashboard() {
               .filter((o) => o.status === "paid")
               .slice(0, 5)
           );
+          setFirstName(accountData.account?.first_name ?? null);
         }
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -128,7 +131,9 @@ export default function OwnerDashboard() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.heading}>{ownerStore?.name}</h1>
+          <h1 className={styles.heading}>
+            {firstName ? `Hey, ${firstName}!` : ownerStore?.name}
+          </h1>
           <p className={styles.subtitle}>Here's how your store is doing.</p>
         </div>
         {storefrontUrl && (

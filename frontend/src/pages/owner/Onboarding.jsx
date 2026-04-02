@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { useOwner } from "../../context/OwnerContext";
 import Alert from "../../components/Alert";
 import Spinner from "../../components/Spinner";
@@ -33,6 +33,9 @@ export default function Onboarding() {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState(null);
   const [done, setDone]               = useState(false);
+
+  // Already completed onboarding — send straight to settings (all hooks above this line)
+  if (onboardingDone) return <Navigate to="/owner/settings" replace />;
 
   const colorPickerValue = HEX_RE.test(primaryColor) ? primaryColor : "#0d6efd";
   const storeSlug = orig.slug ?? "";
@@ -215,19 +218,31 @@ export default function Onboarding() {
               <label className={styles.label} htmlFor="currency">
                 Currency
               </label>
-              <input
+              <select
                 id="currency"
-                type="text"
                 className={styles.input}
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                placeholder="USD"
                 disabled={loading}
-                maxLength={10}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <span className={styles.hint}>3–10 character code (e.g. USD, EUR, GBP).</span>
+              >
+                <option value="usd">USD – US Dollar</option>
+                <option value="eur">EUR – Euro</option>
+                <option value="gbp">GBP – British Pound</option>
+                <option value="cad">CAD – Canadian Dollar</option>
+                <option value="aud">AUD – Australian Dollar</option>
+                <option value="jpy">JPY – Japanese Yen</option>
+                <option value="chf">CHF – Swiss Franc</option>
+                <option value="sgd">SGD – Singapore Dollar</option>
+                <option value="nzd">NZD – New Zealand Dollar</option>
+                <option value="inr">INR – Indian Rupee</option>
+                <option value="brl">BRL – Brazilian Real</option>
+                <option value="mxn">MXN – Mexican Peso</option>
+                <option value="hkd">HKD – Hong Kong Dollar</option>
+                <option value="nok">NOK – Norwegian Krone</option>
+                <option value="sek">SEK – Swedish Krona</option>
+                <option value="dkk">DKK – Danish Krone</option>
+              </select>
+              <span className={styles.hint}>Cannot be changed after you add products.</span>
             </div>
 
             <div className={styles.field}>

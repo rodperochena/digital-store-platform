@@ -59,6 +59,10 @@ export function fetchOwnerStats(ctx) {
   return ownerFetch("/api/owner/stats", {}, ctx);
 }
 
+export function getOwnerAccount(ctx) {
+  return ownerFetch("/api/owner/account", {}, ctx);
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export function getOwnerStore(ctx) {
