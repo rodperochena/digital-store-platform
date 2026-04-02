@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE owner_accounts
+  ADD COLUMN IF NOT EXISTS first_name TEXT,
+  ADD COLUMN IF NOT EXISTS last_name  TEXT;
+
+COMMIT;

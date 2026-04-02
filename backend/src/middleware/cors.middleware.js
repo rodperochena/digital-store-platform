@@ -65,7 +65,7 @@ function corsMiddleware() {
 
     credentials: String(process.env.CORS_CREDENTIALS || "0") === "1",
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-admin-key", "x-request-id"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-key", "x-request-id"],
     exposedHeaders: ["x-request-id"],
     maxAge: 86400,
   };

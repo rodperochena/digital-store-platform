@@ -38,7 +38,8 @@ async function listPublicProductsByStoreSlug(slug) {
       p.title,
       p.description,
       p.price_cents,
-      p.currency
+      p.currency,
+      p.image_url
     FROM products p
     JOIN stores s ON s.id = p.store_id
     WHERE s.slug = $1
@@ -61,7 +62,8 @@ async function getPublicProductBySlugAndId(slug, productId) {
       p.title,
       p.description,
       p.price_cents,
-      p.currency
+      p.currency,
+      p.image_url
     FROM products p
     JOIN stores s ON s.id = p.store_id
     WHERE s.slug = $1

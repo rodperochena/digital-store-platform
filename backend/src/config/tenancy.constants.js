@@ -1,8 +1,6 @@
 "use strict";
 
 // Single source of truth for tenant/store slugs.
-
-// Reserved names that must NEVER map to a tenant store.
 const RESERVED_TENANT_SLUGS = new Set([
   "api",
   "www",
@@ -16,7 +14,7 @@ const RESERVED_TENANT_SLUGS = new Set([
 const SLUG_REGEX = /^[a-z0-9-]{2,63}$/;
 
 function isValidTenantSlug(slug) {
-  return SLUG_REGEX.test(String(slug || ""));
+  return SLUG_REGEX.test(slug);
 }
 
 module.exports = {
@@ -24,4 +22,3 @@ module.exports = {
   SLUG_REGEX,
   isValidTenantSlug,
 };
-

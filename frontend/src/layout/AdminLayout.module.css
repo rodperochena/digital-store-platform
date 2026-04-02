@@ -1,0 +1,89 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+
+.headerInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  flex: 1;
+}
+
+.navLink {
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.12s, background 0.12s;
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.navLinkActive {
+  color: var(--color-accent);
+  background: #e8f0fe;
+  font-weight: 500;
+}
+
+.storePill {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 0.2rem 0.75rem;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storePillLabel {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.main {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}

@@ -21,8 +21,17 @@ function createApp() {
 
   app.use(helmet());
   app.use(corsMiddleware());
-
   app.use(requestId);
+
+  // Stripe webhook: must receive raw body for signature verification.
+  // Registered BEFORE express.json() so the stream is not consumed first.
+  const { stripeWebhookHandler } = require("./routes/stripe.routes");
+  app.post(
+    "/api/webhook/stripe",
+    express.raw({ type: "application/json" }),
+    stripeWebhookHandler
+  );
+
   app.use(express.json());
   app.use(tenantResolver);
 

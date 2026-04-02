@@ -64,7 +64,15 @@ async function getStoreSettings(storeId) {
   return result.rows[0] || null;
 }
 
-async function updateStoreSettings(storeId, { name, currency, primary_color, logo_url }) {
+async function checkSlugAvailable(slug) {
+  const res = await pool.query(
+    `SELECT id FROM stores WHERE slug = $1 LIMIT 1`,
+    [slug]
+  );
+  return res.rows.length === 0; // true = available
+}
+
+async function updateStoreSettings(storeId, { name, currency, primary_color, logo_url, slug }) {
   // Load current store currency (DB source of truth)
   const currentRes = await pool.query(
     `
@@ -110,21 +118,31 @@ async function updateStoreSettings(storeId, { name, currency, primary_color, log
       currency = COALESCE($3, currency),
       primary_color = COALESCE($4, primary_color),
       logo_url = COALESCE($5, logo_url),
+      slug = COALESCE($6, slug),
       updated_at = NOW()
     WHERE id = $1
     RETURNING
       id, slug, name, currency, primary_color, logo_url, is_enabled, created_at, updated_at;
   `;
 
-  const result = await pool.query(sql, [
-    storeId,
-    name ?? null,
-    nextCurrency ?? null,          // <— store normalized currency
-    primary_color ?? null,
-    logo_url ?? null,
-  ]);
-
-  return result.rows[0] || null;
+  try {
+    const result = await pool.query(sql, [
+      storeId,
+      name ?? null,
+      nextCurrency ?? null,
+      primary_color ?? null,
+      logo_url ?? null,
+      slug ?? null,
+    ]);
+    return result.rows[0] || null;
+  } catch (err) {
+    if (err.code === "23505") {
+      const conflict = new Error("This store username is already taken");
+      conflict.statusCode = 409;
+      throw conflict;
+    }
+    throw err;
+  }
 }
 
 module.exports = {
@@ -133,6 +151,7 @@ module.exports = {
   enableStore,
   getStoreSettings,
   updateStoreSettings,
+  checkSlugAvailable,
 };
 
   

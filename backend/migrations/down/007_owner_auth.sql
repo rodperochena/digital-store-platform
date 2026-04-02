@@ -1,0 +1,4 @@
+BEGIN;
+DROP TABLE IF EXISTS owner_sessions;
+DROP TABLE IF EXISTS owner_accounts;
+COMMIT;

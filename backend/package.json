@@ -4,16 +4,14 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-  "start": "node server.js",
-  "dev": "node --watch server.js",
-
-  "migrate": "node scripts/migrate.js",
-  "migrate:up": "node scripts/migrate.js up",
-  "migrate:status": "node scripts/migrate.js status",
-
-  "test": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand",
-  "test:watch": "NODE_ENV=test jest --watch",
-  "test:ci": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand"
+    "start": "node server.js",
+    "dev": "node --watch-path=./src --watch-path=./server.js server.js",
+    "migrate": "node scripts/migrate.js",
+    "migrate:up": "node scripts/migrate.js up",
+    "migrate:status": "node scripts/migrate.js status",
+    "test": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "test:ci": "NODE_ENV=test node scripts/migrate.js up && NODE_ENV=test jest --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -21,12 +19,14 @@
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1",
+    "express": "^4.22.1",
     "express-rate-limit": "^8.2.1",
+    "form-data": "^4.0.5",
     "helmet": "^8.1.0",
     "pg": "^8.18.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "stripe": "^21.0.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -34,6 +34,6 @@
     "supertest": "^7.2.2"
   },
   "overrides": {
-  "minimatch": "^10.2.1"
+    "minimatch": "^10.2.1"
   }
 }

@@ -17,7 +17,7 @@ function normalizeItems(items) {
   return Array.from(map.values());
 }
 
-async function createOrder(storeId, { customer_user_id, items }) {
+async function createOrder(storeId, { customer_user_id, items, buyer_email }) {
   const client = await pool.connect();
   const normalizedItems = normalizeItems(items);
 
@@ -92,11 +92,11 @@ async function createOrder(storeId, { customer_user_id, items }) {
 
     const orderRes = await client.query(
       `
-      INSERT INTO orders (store_id, customer_user_id, status, total_cents, currency)
-      VALUES ($1, $2, 'pending', $3, $4)
-      RETURNING id, store_id, customer_user_id, status, total_cents, currency, created_at, updated_at;
+      INSERT INTO orders (store_id, customer_user_id, status, total_cents, currency, buyer_email)
+      VALUES ($1, $2, 'pending', $3, $4, $5)
+      RETURNING id, store_id, customer_user_id, status, total_cents, currency, buyer_email, created_at, updated_at;
       `,
-      [storeId, customer_user_id ?? null, totalCents, storeCurrency]
+      [storeId, customer_user_id ?? null, totalCents, storeCurrency, buyer_email ?? null]
     );
 
     const order = orderRes.rows[0];
@@ -135,6 +135,7 @@ async function listOrdersByStore(storeId, { limit = 50 } = {}) {
       status,
       total_cents,
       currency,
+      buyer_email,
       stripe_payment_intent_id,
       created_at,
       updated_at
@@ -152,7 +153,8 @@ async function listOrdersByStore(storeId, { limit = 50 } = {}) {
 async function getOrderWithItems(storeId, orderId) {
   const orderRes = await pool.query(
     `
-    SELECT id, store_id, customer_user_id, status, total_cents, currency, stripe_payment_intent_id, created_at, updated_at
+    SELECT id, store_id, customer_user_id, status, total_cents, currency,
+           stripe_payment_intent_id, buyer_email, created_at, updated_at
     FROM orders
     WHERE store_id = $1 AND id = $2
     LIMIT 1;
@@ -172,7 +174,8 @@ async function getOrderWithItems(storeId, orderId) {
       oi.quantity,
       oi.unit_price_cents,
       oi.created_at,
-      p.title
+      p.title,
+      p.delivery_url
     FROM order_items oi
     JOIN orders o
       ON o.id = oi.order_id
@@ -356,6 +359,26 @@ async function resolveEnabledStoreIdBySlug(slug) {
   return res.rows[0]?.id ?? null;
 }
 
+async function attachCheckoutSession(orderId, checkoutSessionId) {
+  const cs = String(checkoutSessionId || "").trim();
+  try {
+    await pool.query(
+      `UPDATE orders
+       SET stripe_checkout_session_id = $2, updated_at = NOW()
+       WHERE id = $1 AND stripe_checkout_session_id IS NULL`,
+      [orderId, cs]
+    );
+  } catch (err) {
+    if (err && err.code === "23505") {
+      // Unique constraint: session already attached to another order
+      const conflict = new Error("Checkout session ID conflict");
+      conflict.statusCode = 409;
+      throw conflict;
+    }
+    throw err;
+  }
+}
+
 module.exports = {
   createOrder,
   resolveEnabledStoreIdBySlug,
@@ -363,5 +386,6 @@ module.exports = {
   getOrderWithItems,
   markOrderPaid,
   attachPaymentIntent,
+  attachCheckoutSession,
   markOrderPaidByPaymentIntent,
 };
