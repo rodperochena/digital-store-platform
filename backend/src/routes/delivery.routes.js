@@ -19,8 +19,18 @@ const { hashToken } = require("../lib/ownerAuth");
 const { getFulfillmentByTokenHash, markFulfillmentOpened } = require("../db/queries/fulfillment.queries");
 const { getOrderWithItems } = require("../db/queries/orders.queries");
 
+// Optional: Supabase Storage (only available when configured)
+let getSignedDeliverableUrl = null;
+try {
+  ({ getSignedDeliverableUrl } = require("../lib/storage"));
+} catch { /* storage not configured */ }
+
 const router = express.Router();
 
+// GET /api/deliver/:token — Public
+// Validates the delivery token, marks the fulfillment as opened, and 302-redirects to the download URL.
+// If the product uses uploaded storage (delivery_file_key), a signed URL is generated on the fly.
+// Delivery URLs are never returned in JSON — they only flow through this redirect.
 router.get("/deliver/:token", async (req, res, next) => {
   const token = String(req.params.token || "").trim();
 
@@ -50,14 +60,22 @@ router.get("/deliver/:token", async (req, res, next) => {
       return res.status(404).json({ error: true, code: "NOT_FOUND", message: "Order not found" });
     }
 
-    const deliverable = result.items.filter((i) => i.delivery_url);
+    const deliverable = result.items.filter((i) => i.delivery_url || i.delivery_file_key);
     if (!deliverable.length) {
       return res.status(404).json({ error: true, code: "NOT_FOUND", message: "No downloadable files found" });
     }
 
-    // MVP: redirect to the first item's delivery_url.
-    // Multi-item orders: buyer gets the first file; future improvement can show a list page.
-    return res.redirect(302, deliverable[0].delivery_url);
+    // Resolve the actual download URL for the first item.
+    // If the product uses an uploaded file (delivery_file_key), generate a signed URL.
+    // Otherwise use the external delivery_url directly.
+    const item = deliverable[0];
+    let redirectUrl;
+    if (item.delivery_file_key && getSignedDeliverableUrl) {
+      redirectUrl = await getSignedDeliverableUrl(item.delivery_file_key, 3600);
+    } else {
+      redirectUrl = item.delivery_url;
+    }
+    return res.redirect(302, redirectUrl);
   } catch (err) {
     return next(err);
   }

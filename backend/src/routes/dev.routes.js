@@ -9,9 +9,11 @@
 const crypto = require("crypto");
 const express = require("express");
 
-const { createStore, enableStore } = require("../db/queries/stores.queries");
+const { createStore, enableStore, getStoreBySlug } = require("../db/queries/stores.queries");
 const { createOwnerAccount } = require("../db/queries/owner.queries");
 const { markOrderPaid } = require("../db/queries/orders.queries");
+const { upsertCustomer } = require("../db/queries/customers.queries");
+const { pool } = require("../db/pool");
 const { requireOwnerSession } = require("../middleware/ownerAuth.middleware");
 const { requireUuidParam } = require("../middleware/validate.middleware");
 const { generateToken } = require("../lib/ownerAuth");
@@ -53,6 +55,24 @@ function devOnly(req, res, next) {
  * - The bootstrap token is NOT a session token or persistent credential.
  */
 router.post("/provision-store", devOnly, async (req, res, next) => {
+  // If the caller provides a specific slug, check for duplicates immediately.
+  const requestedSlug = typeof req.body?.slug === "string" ? req.body.slug.trim() : null;
+  if (requestedSlug) {
+    try {
+      const existing = await getStoreBySlug(requestedSlug);
+      if (existing) {
+        return res.status(409).json({
+          error: true,
+          code: "CONFLICT",
+          message: `A store with slug '${requestedSlug}' already exists`,
+          path: req.originalUrl,
+        });
+      }
+    } catch (err) {
+      return next(err);
+    }
+  }
+
   // Accept optional store name from sign-up form
   const rawName = req.body?.store_name;
   const storeName =
@@ -60,12 +80,13 @@ router.post("/provision-store", devOnly, async (req, res, next) => {
       ? rawName.trim().slice(0, 100)
       : "My Store";
 
-  // Attempt slug generation with retry on uniqueness collision
-  const MAX_RETRIES = 5;
+  // Attempt slug generation with retry on uniqueness collision.
+  // If the caller provided a specific slug (already validated above), use it directly.
+  const MAX_RETRIES = requestedSlug ? 1 : 5;
   let store = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const slug = generateSlug();
+    const slug = requestedSlug || generateSlug();
 
     if (RESERVED_TENANT_SLUGS.has(slug) || !SLUG_REGEX.test(slug)) {
       continue;
@@ -169,6 +190,25 @@ router.post(
           path: req.originalUrl,
           request_id: req.id || null,
         });
+      }
+
+      // Upsert customer — same as the real Stripe webhook flow.
+      // Fire-and-forget: a failure here must NOT fail the response.
+      if (result.transitioned) {
+        pool.query(
+          "SELECT buyer_email, total_cents, buyer_country, marketing_opt_in FROM orders WHERE id = $1 LIMIT 1",
+          [orderId]
+        ).then(({ rows }) => {
+          if (rows[0]?.buyer_email) {
+            return upsertCustomer(storeId, {
+              email:          rows[0].buyer_email,
+              displayName:    null,
+              totalSpentCents: rows[0].total_cents,
+              country:        rows[0].buyer_country,
+              marketingOptIn: rows[0].marketing_opt_in,
+            });
+          }
+        }).catch((err) => console.error("[dev] upsertCustomer failed:", err.message));
       }
 
       return res.json({ order: result.order });

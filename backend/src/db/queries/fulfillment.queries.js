@@ -1,5 +1,11 @@
 "use strict";
 
+// Queries: order fulfillments
+// Manages delivery token state in order_fulfillments (one row per order).
+// delivery_token_hash is stored here; raw tokens only live in memory and emails.
+// getFulfillmentByOrderId intentionally excludes delivery_token_hash — it's only needed for the
+// public delivery endpoint which uses getFulfillmentByTokenHash instead.
+
 const { pool } = require("../pool");
 
 /**

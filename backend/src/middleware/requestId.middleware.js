@@ -1,5 +1,10 @@
 "use strict";
 
+// Middleware: requestId
+// Assigns a unique request ID to every incoming request (from x-request-id header, or generated).
+// Also monkey-patches res.json so that any error response that forgot to set request_id gets it
+// automatically — this saves us from having to thread req.id through every error path.
+
 const crypto = require("crypto");
 
 function requestId(req, res, next) {

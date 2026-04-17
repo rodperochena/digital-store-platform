@@ -1,3 +1,7 @@
+-- Migration 003: Add branding fields to stores.
+-- Stores need a currency so checkout amounts are denominated correctly,
+-- and a primary_color + logo_url so the storefront can reflect the owner's brand.
+
 BEGIN;
 
 ALTER TABLE stores

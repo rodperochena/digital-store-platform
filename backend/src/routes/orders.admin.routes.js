@@ -1,5 +1,9 @@
 "use strict";
 
+// Routes: orders (admin)
+// Admin-only order management endpoints. Owners view their own orders through /api/owner/orders/*.
+// mark-paid-by-payment-intent must come before orders/:orderId (route order: literal before param).
+
 const express = require("express");
 const { z } = require("zod");
 const {
@@ -19,9 +23,8 @@ const paymentIntentSchema = z.object({
   stripe_payment_intent_id: z.string().min(5).max(200),
 });
 
-/**
- * GET /api/stores/:storeId/orders
- */
+// GET /api/stores/:storeId/orders — Admin only
+// Lists orders for a store. Optional ?limit= param (1-100, defaults to 50).
 router.get(
   "/stores/:storeId/orders",
   requireAdminKey,
@@ -59,9 +62,8 @@ router.get(
   }
 );
 
-/**
- * GET /api/stores/:storeId/orders/:orderId
- */
+// GET /api/stores/:storeId/orders/:orderId — Admin only
+// Returns order with its line items and customer record.
 router.get(
   "/stores/:storeId/orders/:orderId",
   requireAdminKey,
@@ -88,9 +90,9 @@ router.get(
   }
 );
 
-/**
- * PATCH /api/stores/:storeId/orders/:orderId/mark-paid
- */
+// PATCH /api/stores/:storeId/orders/:orderId/mark-paid — Admin only
+// Manually marks a pending order as paid. Idempotent (already-paid returns 200).
+// In production use the Stripe webhook instead — this is for manual override only.
 router.patch(
   "/stores/:storeId/orders/:orderId/mark-paid",
   requireAdminKey,
@@ -126,9 +128,8 @@ router.patch(
   }
 );
 
-/**
- * PATCH /api/stores/:storeId/orders/:orderId/attach-payment-intent
- */
+// PATCH /api/stores/:storeId/orders/:orderId/attach-payment-intent — Admin only
+// Links a Stripe payment intent ID to an order. Idempotent on same PI, 409 on conflict.
 router.patch(
   "/stores/:storeId/orders/:orderId/attach-payment-intent",
   requireAdminKey,
@@ -180,9 +181,8 @@ router.patch(
   }
 );
 
-/**
- * PATCH /api/stores/:storeId/orders/mark-paid-by-payment-intent
- */
+// PATCH /api/stores/:storeId/orders/mark-paid-by-payment-intent — Admin only
+// Finds an order by payment intent ID and marks it paid. Must be before /:orderId route.
 router.patch(
   "/stores/:storeId/orders/mark-paid-by-payment-intent",
   requireAdminKey,

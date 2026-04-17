@@ -1,3 +1,6 @@
+-- Migration 011: Add first_name and last_name to owner_accounts.
+-- Needed for personalizing seller notification emails and the dashboard header.
+
 BEGIN;
 
 ALTER TABLE owner_accounts

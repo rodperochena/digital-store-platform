@@ -1,3 +1,5 @@
+-- Rollback 003: Remove branding columns added to stores.
+
 BEGIN;
 
 ALTER TABLE stores

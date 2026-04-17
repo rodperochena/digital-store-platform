@@ -1,5 +1,11 @@
 "use strict";
 
+// Middleware: requireUuidParam + validateBody
+// requireUuidParam — early-returns 400 if a route param isn't a valid UUID format.
+//   Prevents garbage values from reaching queries and avoids confusing Postgres cast errors.
+// validateBody — runs a Zod schema against req.body; attaches req.validatedBody on success.
+//   Keeping validation in middleware keeps route handlers clean and testable.
+
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

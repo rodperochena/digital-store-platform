@@ -1,3 +1,8 @@
+-- Migration 002: Core data model — stores, users, products, orders, order_items.
+-- This is the foundation everything else builds on. The users table here is an
+-- early placeholder for Google-auth buyers; owner auth came later in 007.
+-- Products use price_cents (integer) throughout — never floats for money.
+
 BEGIN;
 
 -- Needed for gen_random_uuid()
@@ -25,7 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
 
   role TEXT NOT NULL CHECK (role IN ('admin', 'customer')),
 
-  -- Google identity (we’ll integrate later)
+  -- Google identity (we'll integrate later)
   google_sub TEXT,
   email TEXT NOT NULL,
   display_name TEXT,

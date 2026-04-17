@@ -1,9 +1,9 @@
 "use strict";
 
-/**
- * Owner auth crypto helpers.
- * No third-party dependencies — uses Node's built-in crypto module only.
- */
+// Lib: ownerAuth
+// Crypto primitives for owner authentication: token generation, token hashing, and password hashing.
+// Using scrypt (not bcrypt) because Node ships it natively — no extra dependency.
+// Kept separate from buyerAuth so that the two can evolve independently (different TTLs, scopes, etc.).
 
 const crypto = require("crypto");
 

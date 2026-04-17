@@ -1,5 +1,9 @@
 "use strict";
 
+// Middleware: requireAdminKey
+// Guards platform-internal admin routes (store creation, enabling stores, etc.).
+// Reads the ADMIN_KEY env var at request time — no startup failure if missing, but will 500 or 401 accordingly.
+
 const crypto = require("crypto");
 
 function jsonError(req, res, status, code, message) {
@@ -19,6 +23,9 @@ function constantTimeEquals(a, b) {
   return crypto.timingSafeEqual(ah, bh);
 }
 
+// Rejects any request that doesn't carry the correct x-admin-key header.
+// A missing or misconfigured ADMIN_KEY returns 500 (server config error, not a client error).
+// Uses SHA-256 hashing before timingSafeEqual to make length-oracle attacks impossible.
 function requireAdminKey(req, res, next) {
   const expected = String(process.env.ADMIN_KEY || "").trim();
   const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";

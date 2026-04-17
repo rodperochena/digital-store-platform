@@ -1,5 +1,10 @@
 "use strict";
 
+// Middleware: notFoundHandler + errorHandler
+// notFoundHandler catches any request that falls through all routes (404).
+// errorHandler is the Express 4-argument error sink — logs the error and sends a clean JSON response.
+// In production, 5xx messages are suppressed so internals don't leak to clients.
+
 function statusToCode(status) {
   if (status === 400) return "BAD_REQUEST";
   if (status === 401) return "UNAUTHORIZED";

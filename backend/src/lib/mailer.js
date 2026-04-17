@@ -1,13 +1,13 @@
 "use strict";
 
-/**
- * Thin mailer abstraction. No new npm dependencies.
- *
- * MAILER_PROVIDER=log     (default) — logs to console, useful in dev/test
- * MAILER_PROVIDER=resend  — calls Resend API via native fetch (Node 18+)
- *
- * @param {{ to: string, subject: string, text: string, html?: string }} opts
- */
+// Lib: mailer
+// Thin email abstraction with two providers: "log" (default, dev/test) and "resend" (production).
+// "log" provider never fails, which is exactly what we want in test — no mocked transport needed.
+// Resend was chosen because it works with native fetch (Node 18+) and doesn't require an SMTP server.
+// To add a new provider (SendGrid, Postmark, etc.), add a branch here — nothing else needs to change.
+
+// Sends a single email. provider is read at call time so env changes mid-process take effect.
+// @param {{ to: string, subject: string, text: string, html?: string }} opts
 async function sendEmail({ to, subject, text, html }) {
   const provider = (process.env.MAILER_PROVIDER || "log").toLowerCase().trim();
 

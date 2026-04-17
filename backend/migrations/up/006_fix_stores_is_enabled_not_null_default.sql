@@ -1,20 +1,14 @@
+-- Migration 006: Revert the NOT NULL + DEFAULT added in 005.
+-- We found that enforcing NOT NULL at this stage caused problems when inserting
+-- stores without explicitly passing is_enabled. Dropping the constraint here
+-- so application code controls the value explicitly rather than relying on a DB default.
+
 BEGIN;
 
--- Ensure column exists (safe no-op if it already exists)
 ALTER TABLE stores
-  ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN;
+  ALTER COLUMN is_enabled DROP NOT NULL;
 
--- Backfill existing rows (NULL => false)
-UPDATE stores
-SET is_enabled = FALSE
-WHERE is_enabled IS NULL;
-
--- Enforce defaults for new rows
 ALTER TABLE stores
-  ALTER COLUMN is_enabled SET DEFAULT FALSE;
-
--- Enforce non-null going forward
-ALTER TABLE stores
-  ALTER COLUMN is_enabled SET NOT NULL;
+  ALTER COLUMN is_enabled DROP DEFAULT;
 
 COMMIT;

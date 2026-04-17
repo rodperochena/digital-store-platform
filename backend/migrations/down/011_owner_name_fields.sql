@@ -1,3 +1,5 @@
+-- Rollback 011: Remove first_name and last_name from owner_accounts.
+
 BEGIN;
 
 ALTER TABLE owner_accounts

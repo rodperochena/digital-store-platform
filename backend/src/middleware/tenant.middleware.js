@@ -1,8 +1,21 @@
 "use strict";
 
+// Middleware: tenantResolver
+// Runs on every request. Sets req.tenant based on the Host header:
+//   1. Custom domain (non-platform host) → DB lookup via domains.queries
+//   2. Subdomain of the platform base domain → req.tenant = { slug }
+//   3. Reserved slug → req.tenant = { slug: null, reserved: true, raw }
+//   4. No match → req.tenant = null
+// Routes decide what to do with req.tenant; this middleware never rejects.
+// Important: step 1 is async (DB call). For step 2+ it's synchronous.
+
 const { RESERVED_TENANT_SLUGS } = require("../config/tenancy.constants");
 
 const TENANCY_BASE_DOMAIN = String(process.env.TENANCY_BASE_DOMAIN || "")
+  .trim()
+  .toLowerCase();
+
+const PLATFORM_DOMAIN = String(process.env.PLATFORM_DOMAIN || "")
   .trim()
   .toLowerCase();
 
@@ -83,18 +96,65 @@ function extractSubdomainFromHost(hostHeader) {
 }
 
 /**
- * Middleware that sets req.tenant based on Host subdomain.
+ * Returns true if the host is the platform's own domain (not a custom domain).
+ * Platform domains: localhost, *.localhost, TENANCY_BASE_DOMAIN, *.TENANCY_BASE_DOMAIN,
+ *                   PLATFORM_DOMAIN, *.PLATFORM_DOMAIN, bare IP addresses.
+ */
+function isPlatformHost(host) {
+  if (!host) return true;
+  if (isIpLiteral(host)) return true;
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+
+  if (TENANCY_BASE_DOMAIN) {
+    if (host === TENANCY_BASE_DOMAIN || host.endsWith(`.${TENANCY_BASE_DOMAIN}`)) return true;
+  }
+  if (PLATFORM_DOMAIN) {
+    if (host === PLATFORM_DOMAIN || host.endsWith(`.${PLATFORM_DOMAIN}`)) return true;
+  }
+  return false;
+}
+
+/**
+ * Middleware that sets req.tenant based on:
+ *  1. Custom domain (Host header, if not a platform domain) — DB lookup
+ *  2. Host subdomain (for platform-hosted stores)
  *
  * Behavior:
- * - If no subdomain tenant => req.tenant = null
- * - If reserved subdomain => req.tenant = { slug:null, reserved:true, raw }
- * - Else => req.tenant = { slug }
+ * - Custom domain resolves  => req.tenant = { customDomain: true, store: <row> }
+ * - Subdomain tenant found  => req.tenant = { slug }
+ * - Reserved subdomain      => req.tenant = { slug:null, reserved:true, raw }
+ * - Nothing matches         => req.tenant = null
  *
- * NOTE: This does NOT validate existence in DB (routes do that).
+ * NOTE: Subdomain path does NOT validate existence in DB (routes do that).
  */
 function tenantResolver(req, res, next) {
-  const host = req.headers.host;
-  const slug = extractSubdomainFromHost(host);
+  const rawHost  = req.headers.host;
+  const host     = stripPort(rawHost);
+
+  // ── Step 1: Custom domain resolution ──────────────────────────────────────
+  // TODO: Add in-memory cache for custom domain lookups (TTL 5 min)
+  if (host && !isPlatformHost(host)) {
+    // Lazily require to avoid circular dep / startup cost when unused
+    const { getStoreByCustomDomain } = require("../db/queries/domains.queries");
+    getStoreByCustomDomain(host)
+      .then((store) => {
+        if (store) {
+          req.tenant = { customDomain: true, store };
+        } else {
+          req.tenant = null;
+        }
+        return next();
+      })
+      .catch(() => {
+        // DB failure — fall through without custom domain resolution
+        req.tenant = null;
+        return next();
+      });
+    return; // async path — next() called inside promise
+  }
+
+  // ── Step 2: Subdomain resolution (platform-hosted) ────────────────────────
+  const slug = extractSubdomainFromHost(rawHost);
 
   if (!slug) {
     req.tenant = null;

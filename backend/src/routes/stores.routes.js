@@ -1,5 +1,9 @@
 "use strict";
 
+// Routes: stores (admin)
+// Platform admin endpoints for creating and configuring stores.
+// All routes here require x-admin-key. Owners use /api/owner/* to manage their own store.
+
 const express = require("express");
 const { z } = require("zod");
 
@@ -39,10 +43,8 @@ const updateStoreSettingsSchema = z.object({
   logo_url: z.string().url().optional(),
 });
 
-/**
- * POST /api/stores
- * Creates a new store (is_enabled defaults to false).
- */
+// POST /api/stores — Admin only (x-admin-key required)
+// Creates a new store in disabled state. Store must be enabled separately via PATCH .../enable.
 router.post(
   "/stores",
   requireAdminKey,
@@ -57,10 +59,8 @@ router.post(
   }
 );
 
-/**
- * PATCH /api/stores/:id/enable
- * Enable store (set is_enabled = true).
- */
+// PATCH /api/stores/:id/enable — Admin only
+// Flips is_enabled to true, making the store publicly accessible.
 router.patch(
   "/stores/:id/enable",
   requireAdminKey,
@@ -86,10 +86,8 @@ router.patch(
   }
 );
 
-/**
- * GET /api/stores/:id/settings
- * Returns store settings/branding fields (admin use).
- */
+// GET /api/stores/:id/settings — Admin only
+// Returns all store settings including internal fields. Owners use GET /api/owner/store instead.
 router.get(
   "/stores/:id/settings",
   requireAdminKey,
@@ -115,10 +113,8 @@ router.get(
   }
 );
 
-/**
- * PATCH /api/stores/:id/settings
- * Updates store settings/branding fields (admin use).
- */
+// PATCH /api/stores/:id/settings — Admin only
+// Updates store settings. Owners use PATCH /api/owner/store instead.
 router.patch(
   "/stores/:id/settings",
   requireAdminKey,

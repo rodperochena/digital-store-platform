@@ -1,5 +1,10 @@
 "use strict";
 
+// Middleware: corsMiddleware
+// Builds and returns the cors() handler based on env vars.
+// Key constraint: in production, CORS_ORIGIN must be explicitly set or all browser cross-origin
+// requests will be blocked. In dev, localhost/127.0.0.1 on any port are allowed automatically.
+
 const cors = require("cors");
 
 function parseCsvOrigins(value) {
@@ -65,7 +70,7 @@ function corsMiddleware() {
 
     credentials: String(process.env.CORS_CREDENTIALS || "0") === "1",
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-admin-key", "x-request-id"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-key", "x-request-id", "x-test-country", "x-store-slug", "x-country"],
     exposedHeaders: ["x-request-id"],
     maxAge: 86400,
   };

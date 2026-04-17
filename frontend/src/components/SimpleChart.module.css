@@ -1,0 +1,60 @@
+.wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.axisLabel {
+  font-size: 9px;
+  fill: var(--color-text-muted);
+  font-family: inherit;
+}
+
+.tooltipLabel {
+  font-size: 10px;
+  fill: rgba(255,255,255,0.8);
+  font-family: inherit;
+}
+
+.tooltipValue {
+  font-size: 11px;
+  fill: #fff;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.barLabel {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+  font-family: inherit;
+}
+
+.barValue {
+  font-size: 10px;
+  fill: var(--color-text-muted);
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.emptyIcon {
+  font-size: 1.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}

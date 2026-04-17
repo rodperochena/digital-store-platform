@@ -1,0 +1,199 @@
+.page { }
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 0.25rem;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.btnPrimary {
+  padding: 0.45rem 1rem;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.12s;
+}
+.btnPrimary:hover { opacity: 0.88; }
+
+.tabRow {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1.25rem;
+}
+
+.tab {
+  padding: 0.4rem 0.875rem;
+  background: none;
+  border: none;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.12s;
+}
+.tab:hover { color: var(--color-text); }
+.tabActive  { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 500; }
+
+.tabCount {
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.loadingRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  padding: 2rem 0;
+}
+
+.errorMsg { color: var(--color-danger); font-size: 0.875rem; margin-bottom: 1rem; }
+
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.emptyEmoji { font-size: 2.5rem; display: block; margin-bottom: 1rem; }
+.emptyTitle { font-size: 1.125rem; font-weight: 600; color: var(--color-text); margin: 0 0 0.5rem; }
+.emptyDesc  { font-size: 0.875rem; color: var(--color-text-muted); margin: 0 0 1.5rem; max-width: 400px; margin-inline: auto; }
+
+.postList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.postRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  transition: background 0.1s;
+}
+.postRow:last-child { border-bottom: none; }
+.postRow:hover { background: var(--color-bg); }
+
+.thumb {
+  width: 52px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbPlaceholder { font-size: 1.125rem; }
+
+.postInfo { flex: 1; min-width: 0; }
+
+.postTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.postTitle {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.postTitle:hover { color: var(--color-accent); }
+
+.statusBadge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 100px;
+  flex-shrink: 0;
+}
+.badgePublished { background: #dcfce7; color: #15803d; }
+.badgeDraft     { background: #f3f4f6; color: var(--color-text-muted); }
+
+.postExcerpt {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.postDate {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.postActions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.btnSmall {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background 0.12s;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+.btnSmall:hover:not(:disabled) { background: var(--color-bg); }
+.btnSmall:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnDanger { color: var(--color-danger); border-color: var(--color-danger); }
+.btnDanger:hover:not(:disabled) { background: #fff5f5; }

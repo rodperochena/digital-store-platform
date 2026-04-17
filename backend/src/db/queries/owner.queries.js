@@ -1,5 +1,10 @@
 "use strict";
 
+// Queries: owner accounts + sessions
+// Manages owner_accounts (one per store), owner_sessions (server-side token store), and
+// password_reset_tokens. All token values stored here are SHA-256 hashes — raw tokens
+// are only ever returned to the client and never stored.
+
 const { pool } = require("../pool");
 
 // ── owner_accounts ────────────────────────────────────────────────────────────
@@ -148,6 +153,52 @@ async function updateOwnerAccount(storeId, fields) {
   );
 }
 
+// ── password_reset_tokens ─────────────────────────────────────────────────────
+
+const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function createPasswordResetToken(ownerId, tokenHash) {
+  const expiresAt = new Date(Date.now() + RESET_TTL_MS);
+  // Invalidate any existing unused tokens for this owner first
+  await pool.query(
+    `UPDATE password_reset_tokens SET used_at = NOW()
+     WHERE owner_id = $1 AND used_at IS NULL AND expires_at > NOW()`,
+    [ownerId]
+  );
+  const sql = `
+    INSERT INTO password_reset_tokens (owner_id, token_hash, expires_at)
+    VALUES ($1, $2, $3)
+    RETURNING id, expires_at;
+  `;
+  const res = await pool.query(sql, [ownerId, tokenHash, expiresAt]);
+  return res.rows[0];
+}
+
+async function getPasswordResetToken(tokenHash) {
+  const sql = `
+    SELECT id, owner_id, expires_at, used_at
+    FROM password_reset_tokens
+    WHERE token_hash = $1
+    LIMIT 1;
+  `;
+  const res = await pool.query(sql, [tokenHash]);
+  return res.rows[0] || null;
+}
+
+async function markPasswordResetTokenUsed(tokenId) {
+  await pool.query(
+    `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`,
+    [tokenId]
+  );
+}
+
+async function updateOwnerPassword(ownerId, passwordHash) {
+  await pool.query(
+    `UPDATE owner_accounts SET password_hash = $2, updated_at = NOW() WHERE id = $1`,
+    [ownerId, passwordHash]
+  );
+}
+
 module.exports = {
   createOwnerAccount,
   getOwnerAccountByStoreId,
@@ -160,4 +211,8 @@ module.exports = {
   revokeOwnerSession,
   touchOwnerSession,
   updateOwnerAccount,
+  createPasswordResetToken,
+  getPasswordResetToken,
+  markPasswordResetTokenUsed,
+  updateOwnerPassword,
 };

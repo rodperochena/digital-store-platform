@@ -1,73 +1,255 @@
+/* ── Page shell ─────────────────────────────────────────────────────────────── */
 .page {
   min-height: 100vh;
+  background: #f9fafb;
+  padding: 40px 16px 80px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #111827;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ── Store branding ──────────────────────────────────────────────────────────── */
+.brandArea {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
-  padding: 2rem 1rem;
+  gap: 10px;
+  margin-bottom: 24px;
 }
 
-.card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 2.5rem 2rem;
-  max-width: 420px;
-  width: 100%;
-  text-align: center;
+.brandLogo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.brandInitial {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* ── Check icon ──────────────────────────────────────────────────────────────── */
+.iconWrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
 .icon {
-  width: 3rem;
-  height: 3rem;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: #dcfce7;
   color: #16a34a;
-  font-size: 1.5rem;
+  font-size: 28px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1.25rem;
 }
 
+/* ── Heading / subheading ────────────────────────────────────────────────────── */
 .heading {
-  font-size: 1.375rem;
+  font-size: 24px;
   font-weight: 700;
-  margin: 0 0 0.75rem;
+  color: #111827;
+  text-align: center;
+  margin: 0 0 8px;
 }
 
-.body {
-  font-size: 0.9375rem;
-  color: var(--color-text-muted);
-  margin: 0 0 1.25rem;
-  line-height: 1.6;
+.subheading {
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+  margin: 0 0 32px;
+  line-height: 1.5;
 }
 
+/* ── Cards ───────────────────────────────────────────────────────────────────── */
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 14px;
+}
+
+.loadingText {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* ── Order meta rows (FIX 1) ─────────────────────────────────────────────────── */
+.metaRows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+.metaLabel {
+  font-size: 13px;
+  color: #6b7280;
+  flex-shrink: 0;
+  min-width: 76px;
+}
+
+.metaLabel::after {
+  content: ": ";
+}
+
+.metaValue {
+  font-size: 14px;
+  color: #111827;
+  word-break: break-all;
+}
+
+/* ── Items list (FIX 2) ──────────────────────────────────────────────────────── */
+.itemList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.itemImgWrap {
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.itemImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.itemImgPlaceholder {
+  font-size: 22px;
+}
+
+.itemInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemPrice {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.itemAction {
+  flex-shrink: 0;
+}
+
+.downloadBtn {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.12s;
+}
+
+.downloadBtn:hover {
+  opacity: 0.88;
+}
+
+.pendingBtn {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #9ca3af;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* ── Steps ───────────────────────────────────────────────────────────────────── */
 .steps {
   list-style: none;
   padding: 0;
-  margin: 0 0 1.25rem;
+  margin: 0 0 20px;
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
-  text-align: left;
+  gap: 14px;
 }
 
 .step {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 12px;
 }
 
 .stepNum {
   flex-shrink: 0;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: var(--color-accent);
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -75,30 +257,117 @@
 }
 
 .stepText {
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
+  font-size: 14px;
+  color: #6b7280;
   line-height: 1.5;
-  padding-top: 0.125rem;
+  padding-top: 2px;
 }
 
+/* ── Stripe reference ────────────────────────────────────────────────────────── */
 .ref {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  margin: 0 0 1.25rem;
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 0 0 16px;
+  text-align: center;
 }
 
 .mono {
   font-family: monospace;
-  font-size: 0.8125rem;
+  font-size: 13px;
 }
 
+/* ── Continue shopping ───────────────────────────────────────────────────────── */
 .returnLink {
-  display: inline-block;
-  font-size: 0.875rem;
-  color: var(--color-accent);
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
   text-decoration: none;
+  margin-bottom: 24px;
 }
 
 .returnLink:hover {
   text-decoration: underline;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 0 0 24px;
+}
+
+/* ── Create account CTA ──────────────────────────────────────────────────────── */
+.createAccountPrompt {
+  text-align: center;
+}
+
+.createAccountTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.createAccountBody {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.createAccountBtn {
+  display: inline-block;
+  padding: 10px 24px;
+  border-radius: 8px;
+  color: #fff;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  transition: opacity 0.12s;
+}
+
+.createAccountBtn:hover {
+  opacity: 0.9;
+}
+
+.createAccountHint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+/* ── Mobile (FIX 5) ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .page {
+    padding: 24px 16px 60px;
+  }
+
+  .heading {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* On very small screens, wrap item row so download button stays visible */
+  .item {
+    flex-wrap: wrap;
+  }
+
+  .itemImgWrap {
+    width: 48px;
+    height: 48px;
+  }
+
+  .itemInfo {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .itemAction {
+    width: 100%;
+    padding-left: 60px; /* align under item info, past 48px image + 12px gap */
+    box-sizing: border-box;
+  }
 }

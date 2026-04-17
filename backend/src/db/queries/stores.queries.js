@@ -1,5 +1,10 @@
 "use strict";
 
+// Queries: stores
+// Store provisioning and settings management.
+// Key constraint: currency cannot be changed once products exist (enforced in updateStoreSettings).
+// getStoreSettings returns all columns; getEnabledStoreMetaBySlug (in storefront.queries) returns public-safe fields only.
+
 const { pool } = require("../pool");
 
 async function createStore({ slug, name, currency }) {
@@ -39,11 +44,8 @@ async function enableStore(storeId) {
   return result.rows[0] || null;
 }
 
-/**
- * Get store settings by store id.
- * @param {string} storeId - The id of the store.
- * @returns {Promise<Object>} The store settings.
- */
+// Returns all store settings columns for internal use (owner dashboard + fulfillment).
+// For public-facing data, use getEnabledStoreMetaBySlug in storefront.queries instead.
 async function getStoreSettings(storeId) {
   const sql = `
     SELECT
@@ -52,8 +54,20 @@ async function getStoreSettings(storeId) {
       name,
       currency,
       primary_color,
+      secondary_color,
       logo_url,
       is_enabled,
+      tagline,
+      description,
+      social_twitter,
+      social_instagram,
+      social_youtube,
+      social_website,
+      storefront_config,
+      font_family,
+      is_paused,
+      pause_message,
+      onboarding_completed_at,
       created_at,
       updated_at
     FROM stores
@@ -72,7 +86,11 @@ async function checkSlugAvailable(slug) {
   return res.rows.length === 0; // true = available
 }
 
-async function updateStoreSettings(storeId, { name, currency, primary_color, logo_url, slug }) {
+async function updateStoreSettings(storeId, {
+  name, currency, primary_color, secondary_color, logo_url, slug,
+  tagline, description, social_twitter, social_instagram, social_youtube, social_website,
+  storefront_config, font_family, is_paused, pause_message,
+}) {
   // Load current store currency (DB source of truth)
   const currentRes = await pool.query(
     `
@@ -114,25 +132,50 @@ async function updateStoreSettings(storeId, { name, currency, primary_color, log
   const sql = `
     UPDATE stores
     SET
-      name = COALESCE($2, name),
-      currency = COALESCE($3, currency),
-      primary_color = COALESCE($4, primary_color),
-      logo_url = COALESCE($5, logo_url),
-      slug = COALESCE($6, slug),
-      updated_at = NOW()
+      name               = COALESCE($2,  name),
+      currency           = COALESCE($3,  currency),
+      primary_color      = COALESCE($4,  primary_color),
+      logo_url           = COALESCE($5,  logo_url),
+      slug               = COALESCE($6,  slug),
+      tagline            = COALESCE($7,  tagline),
+      description        = COALESCE($8,  description),
+      social_twitter     = COALESCE($9,  social_twitter),
+      social_instagram   = COALESCE($10, social_instagram),
+      social_youtube     = COALESCE($11, social_youtube),
+      social_website     = COALESCE($12, social_website),
+      storefront_config  = COALESCE($13, storefront_config),
+      secondary_color    = COALESCE($14, secondary_color),
+      font_family        = COALESCE($15, font_family),
+      is_paused          = COALESCE($16, is_paused),
+      pause_message      = CASE WHEN $17::text IS NOT NULL THEN $17 ELSE pause_message END,
+      updated_at         = NOW()
     WHERE id = $1
     RETURNING
-      id, slug, name, currency, primary_color, logo_url, is_enabled, created_at, updated_at;
+      id, slug, name, currency, primary_color, secondary_color, logo_url, is_enabled,
+      tagline, description, social_twitter, social_instagram, social_youtube, social_website,
+      storefront_config, font_family, is_paused, pause_message, onboarding_completed_at,
+      created_at, updated_at;
   `;
 
   try {
     const result = await pool.query(sql, [
       storeId,
-      name ?? null,
-      nextCurrency ?? null,
-      primary_color ?? null,
-      logo_url ?? null,
-      slug ?? null,
+      name                ?? null,
+      nextCurrency        ?? null,
+      primary_color       ?? null,
+      logo_url            ?? null,
+      slug                ?? null,
+      tagline             ?? null,
+      description         ?? null,
+      social_twitter      ?? null,
+      social_instagram    ?? null,
+      social_youtube      ?? null,
+      social_website      ?? null,
+      storefront_config   != null ? JSON.stringify(storefront_config) : null,
+      secondary_color     ?? null,
+      font_family         ?? null,
+      is_paused           != null ? is_paused : null,
+      pause_message       ?? null,
     ]);
     return result.rows[0] || null;
   } catch (err) {
@@ -145,6 +188,14 @@ async function updateStoreSettings(storeId, { name, currency, primary_color, log
   }
 }
 
+async function setOnboardingCompleted(storeId) {
+  await pool.query(
+    `UPDATE stores SET onboarding_completed_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND onboarding_completed_at IS NULL`,
+    [storeId]
+  );
+}
+
 module.exports = {
   createStore,
   getStoreBySlug,
@@ -152,6 +203,5 @@ module.exports = {
   getStoreSettings,
   updateStoreSettings,
   checkSlugAvailable,
+  setOnboardingCompleted,
 };
-
-  

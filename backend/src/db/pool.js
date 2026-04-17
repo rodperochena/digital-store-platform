@@ -1,5 +1,9 @@
 "use strict";
 
+// DB: connection pool
+// Single pg Pool instance shared across the entire process. All query files require this module.
+// SSL is auto-detected: disabled for localhost, enabled for everything else. Override with DATABASE_SSL env var.
+
 const { Pool } = require("pg");
 
 const DATABASE_URL = process.env.DATABASE_URL;

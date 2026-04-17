@@ -1,5 +1,10 @@
 "use strict";
 
+// Queries: storefront (public-facing)
+// Read-only queries for the public storefront. delivery_url is intentionally excluded from all SELECT
+// clauses here — it is only accessible via the authenticated delivery endpoint (delivery.routes.js).
+// Returns null for disabled stores so public routes can return a clean 404.
+
 const { pool } = require("../pool");
 
 /**
@@ -16,7 +21,18 @@ async function getEnabledStoreMetaBySlug(slug) {
       name,
       currency,
       primary_color,
-      logo_url
+      secondary_color,
+      logo_url,
+      tagline,
+      description,
+      social_twitter,
+      social_instagram,
+      social_youtube,
+      social_website,
+      storefront_config,
+      font_family,
+      is_paused,
+      pause_message
     FROM stores
     WHERE slug = $1 AND is_enabled = TRUE
     LIMIT 1;
@@ -39,13 +55,19 @@ async function listPublicProductsByStoreSlug(slug) {
       p.description,
       p.price_cents,
       p.currency,
-      p.image_url
+      p.image_url,
+      p.sales_count,
+      p.product_type,
+      p.product_category,
+      p.product_tags,
+      p.video_url,
+      p.file_size_display
     FROM products p
     JOIN stores s ON s.id = p.store_id
     WHERE s.slug = $1
       AND s.is_enabled = TRUE
-      AND p.is_active = TRUE
-    ORDER BY p.created_at DESC;
+      AND p.visibility = 'published'
+    ORDER BY p.sort_order ASC, p.created_at DESC;
   `;
   const res = await pool.query(sql, [slug]);
   return res.rows;
@@ -63,12 +85,18 @@ async function getPublicProductBySlugAndId(slug, productId) {
       p.description,
       p.price_cents,
       p.currency,
-      p.image_url
+      p.image_url,
+      p.sales_count,
+      p.product_type,
+      p.product_category,
+      p.product_tags,
+      p.video_url,
+      p.file_size_display
     FROM products p
     JOIN stores s ON s.id = p.store_id
     WHERE s.slug = $1
       AND s.is_enabled = TRUE
-      AND p.is_active = TRUE
+      AND p.visibility IN ('published', 'unlisted')
       AND p.id = $2
     LIMIT 1;
   `;
@@ -81,5 +109,3 @@ module.exports = {
   listPublicProductsByStoreSlug,
   getPublicProductBySlugAndId,
 };
-
-

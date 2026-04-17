@@ -1,6 +1,19 @@
 "use strict";
 
-require("dotenv").config({ quiet: true });
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env"), quiet: true });
+
+// Fail fast if critical environment variables are missing.
+// Optional vars (DB_LOG, CORS_*, etc.) are intentionally excluded.
+const REQUIRED_ENV_VARS = [
+  "DATABASE_URL",
+  "ADMIN_KEY",
+];
+for (const key of REQUIRED_ENV_VARS) {
+  if (!process.env[key]) {
+    console.error(`[server] FATAL: required environment variable ${key} is not set. Exiting.`);
+    process.exit(1);
+  }
+}
 
 const { createApp } = require("./app");
 

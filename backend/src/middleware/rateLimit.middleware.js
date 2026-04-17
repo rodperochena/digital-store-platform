@@ -1,5 +1,12 @@
 "use strict";
 
+// Middleware: publicLimiter + checkoutLimiter
+// Two separate rate limiters with different thresholds:
+//   publicLimiter  — applied to general storefront traffic (meta, products); generous limit
+//   checkoutLimiter — applied to order creation and Stripe checkout; much stricter to prevent abuse
+// Both can be disabled per-env via RL_PUBLIC_DISABLED / RL_CHECKOUT_DISABLED for CI/testing.
+// Keyed by IP + tenant slug so one abusive IP doesn't kill other stores sharing the server.
+
 const rateLimit = require("express-rate-limit");
 
 // express-rate-limit v7+ helper (IPv6-safe). Falls back for older versions.

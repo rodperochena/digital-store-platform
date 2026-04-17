@@ -1,3 +1,9 @@
+-- Migration 007: Per-store owner authentication (accounts + server-side sessions).
+-- One owner_account per store — the owner claims it using a bootstrap token,
+-- sets a password, and from then on authenticates with email + password.
+-- Sessions are stored server-side: only the SHA-256 hash of the token is saved,
+-- never the raw token. This lets us invalidate sessions instantly by deleting the row.
+
 BEGIN;
 
 -- Per-store owner credential (one per store)

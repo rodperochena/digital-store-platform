@@ -59,8 +59,20 @@ export function OwnerProvider({ children }) {
       .then((res) => {
         if (res.ok) {
           setSessionStatus("valid");
+          return res.json();
         } else {
           setSessionStatus("invalid");
+          return null;
+        }
+      })
+      .then((data) => {
+        if (data?.store?.onboarding_completed_at) {
+          _setOnboardingDone(true);
+          persist("owner_onboarding_done", "true");
+        }
+        if (data?.store) {
+          persist("owner_store", data.store);
+          _setOwnerStore(data.store);
         }
       })
       .catch(() => {

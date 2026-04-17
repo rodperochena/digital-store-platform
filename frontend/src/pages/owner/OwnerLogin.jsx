@@ -14,11 +14,11 @@ export default function OwnerLogin() {
   const isExpired = searchParams.get("expired") === "1";
 
   const [expiredDismissed, setExpiredDismissed] = useState(false);
-  const [showForgotMsg, setShowForgotMsg]       = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState(null);
+  const [showForgotMsg, setShowForgotMsg] = useState(false);
 
   // Already authenticated — redirect immediately
   if (ownerStore) {
@@ -131,18 +131,9 @@ export default function OwnerLogin() {
 
         {/* Forgot password */}
         <div className={styles.forgotWrap}>
-          <button
-            type="button"
-            className={styles.forgotLink}
-            onClick={() => setShowForgotMsg((v) => !v)}
-          >
+          <Link to="/owner/forgot-password" className={styles.forgotLink}>
             Forgot password?
-          </button>
-          {showForgotMsg && (
-            <p className={styles.forgotMsg}>
-              Password reset is coming soon. If you're locked out, contact support.
-            </p>
-          )}
+          </Link>
         </div>
 
         <p className={styles.createLink}>

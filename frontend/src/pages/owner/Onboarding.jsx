@@ -3,97 +3,121 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useOwner } from "../../context/OwnerContext";
 import Alert from "../../components/Alert";
 import Spinner from "../../components/Spinner";
-import { updateOwnerStore, getOwnerStore, updateOwnerAccount } from "../../api/owner";
+import { updateOwnerStore, getOwnerStore, updateOwnerAccount, getOwnerAccount, completeOnboarding } from "../../api/owner";
 import styles from "./Onboarding.module.css";
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-function loadPendingEmail() {
-  try {
-    const raw = localStorage.getItem("owner_claim_pending");
-    if (!raw) return "";
-    const parsed = JSON.parse(raw);
-    return parsed?.email ?? "";
-  } catch {
-    return "";
-  }
+const CURRENCIES = [
+  { code: "usd", name: "US Dollar",        symbol: "$"  },
+  { code: "eur", name: "Euro",             symbol: "€"  },
+  { code: "gbp", name: "British Pound",    symbol: "£"  },
+  { code: "cad", name: "Canadian Dollar",  symbol: "$"  },
+  { code: "aud", name: "Australian Dollar",symbol: "$"  },
+  { code: "jpy", name: "Japanese Yen",     symbol: "¥"  },
+  { code: "chf", name: "Swiss Franc",      symbol: "Fr" },
+  { code: "sgd", name: "Singapore Dollar", symbol: "$"  },
+  { code: "nzd", name: "NZ Dollar",        symbol: "$"  },
+  { code: "inr", name: "Indian Rupee",     symbol: "₹"  },
+  { code: "brl", name: "Brazilian Real",   symbol: "R$" },
+  { code: "mxn", name: "Mexican Peso",     symbol: "$"  },
+  { code: "hkd", name: "HK Dollar",        symbol: "$"  },
+  { code: "nok", name: "Norwegian Krone",  symbol: "kr" },
+  { code: "sek", name: "Swedish Krona",    symbol: "kr" },
+  { code: "dkk", name: "Danish Krone",     symbol: "kr" },
+];
+
+const TOTAL_STEPS = 4;
+
+function StepIndicator({ step }) {
+  return (
+    <div className={styles.stepIndicator}>
+      <span className={styles.stepLabel}>Step {step} of {TOTAL_STEPS}</span>
+      <div className={styles.progressBar}>
+        <div
+          className={styles.progressFill}
+          style={{ width: `${(step / TOTAL_STEPS) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function Onboarding() {
-  const { ownerStore, ownerCtx, setOwnerStore, setOnboardingDone } = useOwner();
+  const { ownerStore, ownerCtx, setOwnerStore, setOnboardingDone, onboardingDone } = useOwner();
   const navigate = useNavigate();
 
   const orig = ownerStore ?? {};
 
-  const [email, setEmail]             = useState(loadPendingEmail);
+  // All form state collected across steps
+  const [step, setStep]               = useState(1);
   const [name, setName]               = useState(orig.name ?? "");
-  const [currency, setCurrency]       = useState(orig.currency ?? "");
-  const [primaryColor, setPrimaryColor] = useState(orig.primary_color ?? "");
+  const [tagline, setTagline]         = useState(orig.tagline ?? "");
+  const [currency, setCurrency]       = useState(orig.currency || "usd");
+  const [primaryColor, setPrimaryColor] = useState(orig.primary_color ?? "#0d6efd");
   const [logoUrl, setLogoUrl]         = useState(orig.logo_url ?? "");
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState(null);
-  const [done, setDone]               = useState(false);
 
-  // Already completed onboarding — send straight to settings (all hooks above this line)
-  if (onboardingDone) return <Navigate to="/owner/settings" replace />;
+  // Already completed onboarding — all hooks above this line
+  if (onboardingDone) return <Navigate to="/owner/dashboard" replace />;
 
   const colorPickerValue = HEX_RE.test(primaryColor) ? primaryColor : "#0d6efd";
+  const accentColor = HEX_RE.test(primaryColor) ? primaryColor : "#0d6efd";
   const storeSlug = orig.slug ?? "";
-  const storeUrl = storeSlug ? `/store/${storeSlug}` : null;
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  function goNext() {
     setError(null);
-
-    const trimEmail    = email.trim();
-    const trimName     = name.trim();
-    const trimCurrency = currency.trim();
-    const trimColor    = primaryColor.trim();
-    const trimLogo     = logoUrl.trim();
-
-    // Validate email if provided
-    if (trimEmail && !trimEmail.includes("@")) {
-      setError("Please enter a valid email address.");
-      return;
+    // Validate current step
+    if (step === 1) {
+      if (!name.trim() || name.trim().length < 2) {
+        setError("Store name must be at least 2 characters.");
+        return;
+      }
+      if (name.trim().length > 100) {
+        setError("Store name must be 100 characters or fewer.");
+        return;
+      }
     }
-
-    // Build body: only non-empty values that differ from original
-    const body = {};
-    if (trimName && trimName !== (orig.name ?? ""))               body.name = trimName;
-    if (trimCurrency && trimCurrency !== (orig.currency ?? ""))   body.currency = trimCurrency;
-    if (trimColor && trimColor !== (orig.primary_color ?? ""))    body.primary_color = trimColor;
-    if (trimLogo && trimLogo !== (orig.logo_url ?? ""))           body.logo_url = trimLogo;
-
-    // Client-side validation for fields being sent
-    if (body.name !== undefined && (body.name.length < 2 || body.name.length > 100)) {
-      setError("Store name must be 2–100 characters.");
-      return;
+    if (step === 2) {
+      if (!currency) {
+        setError("Please choose a currency.");
+        return;
+      }
     }
-    if (body.currency !== undefined && (body.currency.length < 3 || body.currency.length > 10)) {
-      setError("Currency must be 3–10 characters (e.g. USD, EUR).");
-      return;
-    }
-    if (body.primary_color !== undefined && !HEX_RE.test(body.primary_color)) {
-      setError("Primary color must be a 6-digit hex value like #RRGGBB.");
-      return;
-    }
+    setStep((s) => s + 1);
+  }
 
+  function goBack() {
+    setError(null);
+    setStep((s) => s - 1);
+  }
+
+  async function handleFinish() {
+    setError(null);
     setLoading(true);
     try {
-      const tasks = [];
-      if (Object.keys(body).length > 0) {
-        tasks.push(updateOwnerStore(body, ownerCtx));
-      }
-      if (trimEmail) {
-        tasks.push(updateOwnerAccount({ email: trimEmail }, ownerCtx));
-      }
-      await Promise.all(tasks);
+      const body = {};
+      const trimName     = name.trim();
+      const trimTagline  = tagline.trim();
+      const trimColor    = primaryColor.trim();
+      const trimLogo     = logoUrl.trim();
 
-      // Re-fetch authoritative store state
+      if (trimName && trimName !== (orig.name ?? ""))             body.name = trimName;
+      if (trimTagline !== (orig.tagline ?? ""))                   body.tagline = trimTagline || undefined;
+      if (currency && currency !== (orig.currency ?? ""))         body.currency = currency;
+      if (trimColor && trimColor !== (orig.primary_color ?? ""))  body.primary_color = trimColor;
+      if (trimLogo !== (orig.logo_url ?? ""))                     body.logo_url = trimLogo || undefined;
+
+      if (Object.keys(body).length > 0) {
+        await updateOwnerStore(body, ownerCtx);
+      }
+
       const data = await getOwnerStore(ownerCtx);
       setOwnerStore(data.store);
+      completeOnboarding(ownerCtx).catch(() => {});
       setOnboardingDone(true);
-      setDone(true);
+      navigate("/owner/dashboard", { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -101,178 +125,169 @@ export default function Onboarding() {
     }
   }
 
-  if (done) {
+  // ── Step 1: Store identity ────────────────────────────────────────────────
+
+  if (step === 1) {
     return (
       <div className={styles.page}>
-        <div className={styles.successBox}>
-          <div className={styles.successIcon} aria-hidden="true">✓</div>
-          <h1 className={styles.successHeading}>Your store is ready</h1>
-          {storeSlug && (
-            <p className={styles.successUrl}>
-              <span className={styles.mono}>/store/{storeSlug}</span>
-            </p>
-          )}
-          <p className={styles.successNote}>
-            You can customise your store further from the Settings page at any time.
-          </p>
-          <button
-            type="button"
-            className={styles.btnPrimary}
-            onClick={() => navigate("/owner/dashboard", { replace: true })}
-          >
-            Go to dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
+        <StepIndicator step={1} />
+        <h1 className={styles.pageHeading}>Set up your store</h1>
+        <p className={styles.pageSubtitle}>Give your store a name that buyers will remember.</p>
 
-  return (
-    <div className={styles.page}>
-      <h1 className={styles.pageHeading}>Set Up Your Store</h1>
-      <p className={styles.pageSubtitle}>
-        Review and configure your store. Everything here can be changed later in Settings.
-      </p>
-
-      {error && (
-        <div className={styles.alertWrap}>
-          <Alert type="error" onDismiss={() => setError(null)}>
-            {error}
-          </Alert>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className={styles.form} noValidate>
-        {/* ── Contact ─────────────────────────────────────────────────── */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>Contact</h2>
-
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="ownerEmail">
-              Email <span className={styles.optional}>(optional)</span>
-            </label>
-            <input
-              id="ownerEmail"
-              type="email"
-              className={styles.input}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              disabled={loading}
-              autoComplete="email"
-            />
-            <span className={styles.hint}>
-              Used to contact you about your store. Not shown publicly.
-            </span>
+        {error && (
+          <div className={styles.alertWrap}>
+            <Alert type="error" onDismiss={() => setError(null)}>{error}</Alert>
           </div>
-        </section>
+        )}
 
-        {/* ── Store Identity ──────────────────────────────────────────── */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>Store Identity</h2>
+        {/* Store preview */}
+        <div className={styles.storePreview} style={{ borderColor: accentColor }}>
+          <div className={styles.previewHeader} style={{ background: accentColor + "18", borderBottomColor: accentColor }}>
+            <div className={styles.previewLogo} style={{ background: accentColor }}>
+              {name.trim().charAt(0).toUpperCase() || "S"}
+            </div>
+            <span className={styles.previewName}>{name.trim() || "Your Store Name"}</span>
+          </div>
+          {tagline.trim() && (
+            <div className={styles.previewTagline}>{tagline.trim()}</div>
+          )}
+          <div className={styles.previewUrl}>/store/{storeSlug}</div>
+        </div>
 
+        <div className={styles.form}>
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="storeName">
-              Store Name
-            </label>
+            <label className={styles.label} htmlFor="storeName">Store Name</label>
             <input
               id="storeName"
               type="text"
               className={styles.input}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Store"
-              disabled={loading}
+              placeholder="e.g. Creative Assets Co."
               maxLength={100}
+              autoFocus
             />
+            <span className={styles.hint}>This is the first thing buyers see.</span>
           </div>
 
-          <div className={styles.readonlyRow}>
-            <span className={styles.label}>Store URL</span>
-            <div className={styles.readonlyValue}>
-              <span className={styles.mono}>/store/{orig.slug}</span>
-              <span className={styles.fixedPill}>Fixed</span>
-            </div>
-            <span className={styles.hint}>
-              Your store's web address is permanent and cannot be changed.
-            </span>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="tagline">
+              Tagline <span className={styles.optional}>(optional)</span>
+            </label>
+            <input
+              id="tagline"
+              type="text"
+              className={styles.input}
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              placeholder="e.g. Premium templates for modern creators"
+              maxLength={150}
+            />
+            <span className={styles.charCount}>{tagline.length}/150</span>
           </div>
 
-          {storeSlug && (
-            <div className={styles.urlPreview}>
-              <span className={styles.urlPreviewLabel}>Your store's public address</span>
-              <span className={styles.urlPreviewValue}>/store/{storeSlug}</span>
-              <span className={styles.urlWarning}>
-                This URL cannot be changed later.
-              </span>
-            </div>
-          )}
-        </section>
+          <div className={styles.stepFooter}>
+            <div /> {/* spacer */}
+            <button type="button" className={styles.btnPrimary} onClick={goNext}>
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-        {/* ── Branding ────────────────────────────────────────────────── */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>Branding</h2>
+  // ── Step 2: Currency ──────────────────────────────────────────────────────
 
-          <div className={styles.row2}>
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="currency">
-                Currency
-              </label>
-              <select
-                id="currency"
+  if (step === 2) {
+    return (
+      <div className={styles.page}>
+        <StepIndicator step={2} />
+        <h1 className={styles.pageHeading}>Choose your currency</h1>
+        <p className={styles.pageSubtitle}>All your products will use this currency for pricing and Stripe payments.</p>
+
+        {error && (
+          <div className={styles.alertWrap}>
+            <Alert type="error" onDismiss={() => setError(null)}>{error}</Alert>
+          </div>
+        )}
+
+        <div className={styles.currencyWarning}>
+          <span className={styles.warningIcon}>⚠</span>
+          <span>Choose carefully — this will apply to all products. Changing it later may affect existing products.</span>
+        </div>
+
+        <div className={styles.currencyGrid}>
+          {CURRENCIES.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              className={`${styles.currencyCard} ${currency === c.code ? styles.currencyCardSelected : ""}`}
+              style={currency === c.code ? { borderColor: accentColor, background: accentColor + "0d" } : {}}
+              onClick={() => setCurrency(c.code)}
+            >
+              <span className={styles.currencySymbol}>{c.symbol}</span>
+              <span className={styles.currencyCode}>{c.code.toUpperCase()}</span>
+              <span className={styles.currencyName}>{c.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className={styles.stepFooter}>
+          <button type="button" className={styles.btnGhost} onClick={goBack}>
+            ← Back
+          </button>
+          <button type="button" className={styles.btnPrimary} onClick={goNext}>
+            Next →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step 3: Branding ──────────────────────────────────────────────────────
+
+  if (step === 3) {
+    return (
+      <div className={styles.page}>
+        <StepIndicator step={3} />
+        <h1 className={styles.pageHeading}>Personalize your brand</h1>
+        <p className={styles.pageSubtitle}>Choose a color and logo that represent your store. You can always change these later.</p>
+
+        {error && (
+          <div className={styles.alertWrap}>
+            <Alert type="error" onDismiss={() => setError(null)}>{error}</Alert>
+          </div>
+        )}
+
+        <div className={styles.form}>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="primaryColor">Primary Color</label>
+            <div className={styles.colorRow}>
+              <input
+                type="color"
+                className={styles.colorSwatch}
+                value={colorPickerValue}
+                onChange={(e) => setPrimaryColor(e.target.value)}
+                title="Pick a color"
+              />
+              <input
+                id="primaryColor"
+                type="text"
                 className={styles.input}
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                disabled={loading}
-              >
-                <option value="usd">USD – US Dollar</option>
-                <option value="eur">EUR – Euro</option>
-                <option value="gbp">GBP – British Pound</option>
-                <option value="cad">CAD – Canadian Dollar</option>
-                <option value="aud">AUD – Australian Dollar</option>
-                <option value="jpy">JPY – Japanese Yen</option>
-                <option value="chf">CHF – Swiss Franc</option>
-                <option value="sgd">SGD – Singapore Dollar</option>
-                <option value="nzd">NZD – New Zealand Dollar</option>
-                <option value="inr">INR – Indian Rupee</option>
-                <option value="brl">BRL – Brazilian Real</option>
-                <option value="mxn">MXN – Mexican Peso</option>
-                <option value="hkd">HKD – Hong Kong Dollar</option>
-                <option value="nok">NOK – Norwegian Krone</option>
-                <option value="sek">SEK – Swedish Krona</option>
-                <option value="dkk">DKK – Danish Krone</option>
-              </select>
-              <span className={styles.hint}>Cannot be changed after you add products.</span>
+                value={primaryColor}
+                onChange={(e) => setPrimaryColor(e.target.value)}
+                placeholder="#0d6efd"
+                maxLength={7}
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <div
+                className={styles.colorPreviewDot}
+                style={{ background: HEX_RE.test(primaryColor) ? primaryColor : "#0d6efd" }}
+              />
             </div>
-
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="primaryColor">
-                Primary Color
-              </label>
-              <div className={styles.colorRow}>
-                <input
-                  type="color"
-                  className={styles.colorSwatch}
-                  value={colorPickerValue}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  disabled={loading}
-                  title="Pick a color"
-                />
-                <input
-                  id="primaryColor"
-                  type="text"
-                  className={styles.input}
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  placeholder="#0d6efd"
-                  disabled={loading}
-                  maxLength={7}
-                  spellCheck={false}
-                  autoComplete="off"
-                />
-              </div>
-              <span className={styles.hint}>Hex format: #RRGGBB.</span>
-            </div>
+            <span className={styles.hint}>Hex format: #RRGGBB. Used for buttons, borders, and accents.</span>
           </div>
 
           <div className={styles.field}>
@@ -285,22 +300,88 @@ export default function Onboarding() {
               className={styles.input}
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
-              placeholder="https://…"
-              disabled={loading}
+              placeholder="https://example.com/logo.png"
               spellCheck={false}
               autoComplete="off"
             />
+            <span className={styles.hint}>A direct link to your logo image. Shown in your store header.</span>
           </div>
-        </section>
 
-        {/* ── Footer ──────────────────────────────────────────────────── */}
-        <div className={styles.footer}>
-          <button type="submit" className={styles.btnPrimary} disabled={loading}>
-            {loading && <Spinner size={15} />}
-            {loading ? "Saving…" : "Save & Continue"}
-          </button>
+          <div className={styles.stepFooter}>
+            <button type="button" className={styles.btnGhost} onClick={goBack}>
+              ← Back
+            </button>
+            <div className={styles.stepFooterRight}>
+              <button type="button" className={styles.btnSkip} onClick={goNext}>
+                Skip for now →
+              </button>
+              <button type="button" className={styles.btnPrimary} onClick={goNext}>
+                Next →
+              </button>
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
+    );
+  }
+
+  // ── Step 4: Summary / finish ──────────────────────────────────────────────
+
+  const selectedCurrency = CURRENCIES.find((c) => c.code === currency);
+
+  return (
+    <div className={styles.page}>
+      <StepIndicator step={4} />
+      <h1 className={styles.pageHeading}>You're all set!</h1>
+      <p className={styles.pageSubtitle}>Here's a summary of your store setup. You can change everything in Settings later.</p>
+
+      {error && (
+        <div className={styles.alertWrap}>
+          <Alert type="error" onDismiss={() => setError(null)}>{error}</Alert>
+        </div>
+      )}
+
+      <div className={styles.summaryCard}>
+        <div className={styles.summaryRow}>
+          <span className={styles.summaryLabel}>Store Name</span>
+          <span className={styles.summaryValue}>{name.trim() || orig.name || "—"}</span>
+        </div>
+        {tagline.trim() && (
+          <div className={styles.summaryRow}>
+            <span className={styles.summaryLabel}>Tagline</span>
+            <span className={styles.summaryValue}>{tagline.trim()}</span>
+          </div>
+        )}
+        <div className={styles.summaryRow}>
+          <span className={styles.summaryLabel}>Currency</span>
+          <span className={styles.summaryValue}>
+            {selectedCurrency ? `${selectedCurrency.code.toUpperCase()} — ${selectedCurrency.name}` : currency.toUpperCase()}
+          </span>
+        </div>
+        {HEX_RE.test(primaryColor) && (
+          <div className={styles.summaryRow}>
+            <span className={styles.summaryLabel}>Brand Color</span>
+            <div className={styles.summaryColorRow}>
+              <div className={styles.summaryColorDot} style={{ background: primaryColor }} />
+              <span className={styles.summaryValue}>{primaryColor}</span>
+            </div>
+          </div>
+        )}
+        <div className={styles.summaryRow}>
+          <span className={styles.summaryLabel}>Store URL</span>
+          <span className={`${styles.summaryValue} ${styles.summaryMono}`}>/store/{storeSlug}</span>
+        </div>
+      </div>
+
+      <div className={styles.stepFooter}>
+        <button type="button" className={styles.btnGhost} onClick={goBack} disabled={loading}>
+          ← Back
+        </button>
+        <button type="button" className={styles.btnPrimary} onClick={handleFinish} disabled={loading}>
+          {loading && <Spinner size={14} />}
+          {loading ? "Saving…" : "Go to Dashboard →"}
+        </button>
+      </div>
     </div>
   );
 }

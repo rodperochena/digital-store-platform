@@ -1,5 +1,13 @@
 "use strict";
 
+// Routes: orders (public checkout)
+// Three equivalent checkout endpoints for the three store-resolution strategies:
+//   /stores/:storeId/orders  — legacy, resolves by UUID
+//   /store/:slug/orders      — preferred, resolves by slug
+//   /storefront/orders       — resolves by Host subdomain (tenant middleware)
+// All three share the same createOrder query. Payment truth always comes from the Stripe webhook —
+// these endpoints only create a pending order; marking paid happens in stripe.routes.js.
+
 const express = require("express");
 const { z } = require("zod");
 
@@ -83,10 +91,8 @@ async function handleCreateOrderBySlug(req, res, next, slug) {
   }
 }
 
-/**
- * POST /api/stores/:storeId/orders
- * Public checkout endpoint (legacy/compatible)
- */
+// POST /api/stores/:storeId/orders — Public, rate-limited
+// Legacy checkout endpoint; kept for backward compatibility.
 router.post(
   "/stores/:storeId/orders",
   checkoutLimiter,
@@ -98,10 +104,8 @@ router.post(
   }
 );
 
-/**
- * POST /api/store/:slug/orders
- * Public checkout endpoint (preferred: slug-based)
- */
+// POST /api/store/:slug/orders — Public, rate-limited
+// Preferred slug-based checkout endpoint.
 router.post(
   "/store/:slug/orders",
   checkoutLimiter,
@@ -116,12 +120,8 @@ router.post(
   }
 );
 
-/**
- * POST /api/storefront/orders
- * Public checkout endpoint (preferred: Host/tenant-based)
- *
- * Requires tenant middleware upstream to set req.tenant = {slug} or null.
- */
+// POST /api/storefront/orders — Public, rate-limited
+// Host-header-based checkout endpoint. Requires tenantResolver to have set req.tenant.
 router.post(
   "/storefront/orders",
   checkoutLimiter,

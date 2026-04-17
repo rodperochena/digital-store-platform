@@ -1,0 +1,69 @@
+.shell {
+  min-height: 100vh;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+.bigEmoji {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 0.75rem;
+}
+
+.desc {
+  font-size: 0.9375rem;
+  color: #6b7280;
+  margin: 0 0 0.75rem;
+  line-height: 1.55;
+}
+
+.loadingText {
+  color: #6b7280;
+  margin: 2rem 0;
+}
+
+.errorMsg {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.unsubBtn {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.unsubBtn:hover:not(:disabled) { opacity: 0.88; }
+.unsubBtn:disabled { opacity: 0.5; cursor: not-allowed; }

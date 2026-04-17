@@ -36,11 +36,13 @@ const { request, app, randSuffix, createStore, enableStore, createProduct } = re
 jest.setTimeout(30_000);
 
 // Each test gets a unique mock session ID to avoid unique-constraint conflicts.
+// RUN_ID ensures IDs don't collide with data left in the DB from previous test runs.
+const RUN_ID = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 let _sessionSeq = 0;
 beforeEach(() => {
   jest.clearAllMocks();
   _sessionSeq++;
-  const sid = `cs_test_mock_${_sessionSeq}`;
+  const sid = `cs_test_mock_${RUN_ID}_${_sessionSeq}`;
   mockSessionCreate.mockResolvedValue({
     id: sid,
     url: `https://checkout.stripe.com/c/pay/${sid}`,

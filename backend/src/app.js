@@ -9,6 +9,14 @@ const { notFoundHandler, errorHandler } = require("./middleware/error.middleware
 const { tenantResolver } = require("./middleware/tenant.middleware");
 const { requestId } = require("./middleware/requestId.middleware");
 
+// Ensure Supabase Storage buckets exist on startup (fire-and-forget)
+try {
+  const { ensureBucketsExist } = require("./lib/storage");
+  ensureBucketsExist().catch((err) => console.warn("Storage bucket setup:", err.message));
+} catch {
+  // SUPABASE_URL / SUPABASE_SERVICE_KEY not set — storage features unavailable
+}
+
 function createApp() {
   const app = express();
 

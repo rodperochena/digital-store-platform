@@ -1,5 +1,11 @@
 "use strict";
 
+// Middleware: requireOwnerSession
+// Validates owner session tokens for store-owner-authenticated routes.
+// On success, attaches req.ownerStoreId, req.ownerAccountId, and req.ownerTokenHash.
+// Also fires a non-blocking last_seen_at update (fire-and-forget) — failure there must never
+// block the actual request.
+
 const { hashToken } = require("../lib/ownerAuth");
 const {
   getOwnerSessionByTokenHash,

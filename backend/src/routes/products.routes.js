@@ -1,5 +1,9 @@
 "use strict";
 
+// Routes: products (admin)
+// Admin-only product management endpoints scoped to a store.
+// Owners manage their products through /api/owner/products/* instead.
+
 const express = require("express");
 const { z } = require("zod");
 
@@ -17,9 +21,8 @@ const createProductSchema = z.object({
   is_active: z.boolean().optional(),
 });
 
-/**
- * POST /api/stores/:storeId/products
- */
+// POST /api/stores/:storeId/products — Admin only
+// Creates a product for a store. Currency is inherited from the store.
 router.post(
   "/stores/:storeId/products",
   requireAdminKey,
@@ -36,9 +39,8 @@ router.post(
   }
 );
 
-/**
- * GET /api/stores/:storeId/products
- */
+// GET /api/stores/:storeId/products — Admin only
+// Returns all products for a store (including inactive/draft).
 router.get(
   "/stores/:storeId/products",
   requireAdminKey,

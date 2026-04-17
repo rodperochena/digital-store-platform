@@ -1,18 +1,17 @@
 "use strict";
 
+// Routes: health
+// Exposes GET /api/health — checks DB connectivity and returns 200 or 503.
+// HEALTH_SIMULATE_DB_DOWN=1 forces a 503 without hitting the DB (useful for health-check CI tests).
+
 const express = require("express");
 const { pingDb } = require("../db/ping");
 
 const healthRouter = express.Router();
 
-/**
- * GET /api/health
- * - 200 if server + DB are healthy
- * - 503 if DB is unhealthy
- *
- * Dev-only test hook:
- * - If HEALTH_SIMULATE_DB_DOWN=1, we return 503 without hitting DB.
- */
+// GET /api/health — Public, no auth
+// Pings the DB with SELECT 1. Returns 503 if unreachable.
+// db_ms is only included outside production to avoid exposing latency info publicly.
 healthRouter.get("/", async (req, res) => {
   try {
     if (process.env.HEALTH_SIMULATE_DB_DOWN === "1") {

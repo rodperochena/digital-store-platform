@@ -1,5 +1,9 @@
 "use strict";
 
+// Routes: storefrontHost (Host-header-based)
+// Same storefront data as storefront.routes.js, but the store is identified via the Host subdomain
+// (req.tenant.slug) rather than a URL param. Used when the frontend is served on mystore.platform.com.
+
 const express = require("express");
 const {
   getEnabledStoreMetaBySlug,
@@ -12,10 +16,8 @@ const { requireUuidParam } = require("../middleware/validate.middleware");
 
 const router = express.Router();
 
-/**
- * GET /api/storefront/meta
- * Tenant comes from Host subdomain
- */
+// GET /api/storefront/meta — Public, tenant from Host subdomain
+// Equivalent to /store/:slug/meta but for subdomain-based routing.
 router.get("/storefront/meta", requireTenantSlug, async (req, res, next) => {
   try {
     const slug = req.storeSlug;
@@ -36,9 +38,7 @@ router.get("/storefront/meta", requireTenantSlug, async (req, res, next) => {
   }
 });
 
-/**
- * GET /api/storefront/products
- */
+// GET /api/storefront/products — Public, tenant from Host subdomain
 router.get("/storefront/products", requireTenantSlug, async (req, res, next) => {
   try {
     const slug = req.storeSlug;
@@ -60,9 +60,7 @@ router.get("/storefront/products", requireTenantSlug, async (req, res, next) => 
   }
 });
 
-/**
- * GET /api/storefront/products/:productId
- */
+// GET /api/storefront/products/:productId — Public, tenant from Host subdomain
 router.get(
   "/storefront/products/:productId",
   requireTenantSlug,

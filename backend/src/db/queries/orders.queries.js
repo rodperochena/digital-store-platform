@@ -1,5 +1,11 @@
 "use strict";
 
+// Queries: orders
+// Core order lifecycle queries: create, fetch, mark paid, attach payment/checkout session IDs.
+// createOrder runs inside a transaction — it verifies the store is enabled AND all products exist
+// before inserting, so a partial order is never possible.
+// markOrderPaid is idempotent: already-paid returns kind:"OK", transitioned:false.
+
 const { pool } = require("../pool");
 
 function normalizeItems(items) {
@@ -17,7 +23,19 @@ function normalizeItems(items) {
   return Array.from(map.values());
 }
 
-async function createOrder(storeId, { customer_user_id, items, buyer_email }) {
+// Updates sales_count on all products in a paid order. Fire-and-forget — called from the webhook.
+async function incrementProductSalesCount(productIds) {
+  if (!productIds || productIds.length === 0) return;
+  await pool.query(
+    `UPDATE products SET sales_count = sales_count + 1 WHERE id = ANY($1::uuid[])`,
+    [productIds]
+  );
+}
+
+// Creates a pending order inside a transaction. Validates store is enabled and all products exist
+// before inserting. Returns null (not an error) if store is disabled — routes map this to a public 404.
+// I'm using a transaction here to ensure we never have an order without all its items.
+async function createOrder(storeId, { customer_user_id, items, buyer_email, discount_code_id, discount_amount_cents, buyer_country, marketing_opt_in }) {
   const client = await pool.connect();
   const normalizedItems = normalizeItems(items);
 
@@ -84,26 +102,43 @@ async function createOrder(storeId, { customer_user_id, items, buyer_email }) {
       }
     }
 
+    // Build a map of item-level sale prices (if provided by caller)
+    const itemSalePriceMap = new Map();
+    for (const it of items) {
+      if (it.sale_price_cents != null) {
+        itemSalePriceMap.set(it.product_id, Math.max(0, it.sale_price_cents));
+      }
+    }
+
     let totalCents = 0;
     for (const it of normalizedItems) {
-      const unitPrice = productsMap.get(it.product_id).price_cents;
+      // Use sale price if provided, otherwise fall back to base price
+      const unitPrice = itemSalePriceMap.has(it.product_id)
+        ? itemSalePriceMap.get(it.product_id)
+        : productsMap.get(it.product_id).price_cents;
       totalCents += unitPrice * it.quantity;
     }
 
+    const discountCents = Math.max(0, Math.min(Number(discount_amount_cents) || 0, totalCents));
+    const finalTotal = totalCents - discountCents;
+
     const orderRes = await client.query(
       `
-      INSERT INTO orders (store_id, customer_user_id, status, total_cents, currency, buyer_email)
-      VALUES ($1, $2, 'pending', $3, $4, $5)
-      RETURNING id, store_id, customer_user_id, status, total_cents, currency, buyer_email, created_at, updated_at;
+      INSERT INTO orders (store_id, customer_user_id, status, total_cents, currency, buyer_email, discount_code_id, discount_amount_cents, buyer_country, marketing_opt_in)
+      VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, store_id, customer_user_id, status, total_cents, currency, buyer_email, discount_code_id, discount_amount_cents, buyer_country, marketing_opt_in, created_at, updated_at;
       `,
-      [storeId, customer_user_id ?? null, totalCents, storeCurrency, buyer_email ?? null]
+      [storeId, customer_user_id ?? null, finalTotal, storeCurrency, buyer_email ?? null, discount_code_id ?? null, discountCents, buyer_country ?? null, marketing_opt_in ?? false]
     );
 
     const order = orderRes.rows[0];
 
     // MVP ok: loop inserts. (Later: bulk insert for scale.)
     for (const it of normalizedItems) {
-      const unitPrice = productsMap.get(it.product_id).price_cents;
+      // Use sale price if provided, otherwise fall back to base price
+      const unitPrice = itemSalePriceMap.has(it.product_id)
+        ? itemSalePriceMap.get(it.product_id)
+        : productsMap.get(it.product_id).price_cents;
       await client.query(
         `
         INSERT INTO order_items (order_id, product_id, quantity, unit_price_cents)
@@ -123,8 +158,25 @@ async function createOrder(storeId, { customer_user_id, items, buyer_email }) {
   }
 }
 
-async function listOrdersByStore(storeId, { limit = 50 } = {}) {
+async function listOrdersByStore(storeId, { limit = 50, search, status } = {}) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
+
+  const conditions = ["store_id = $1"];
+  const values     = [storeId];
+  let   idx        = 2;
+
+  if (status && ["pending", "paid", "failed", "refunded"].includes(status)) {
+    conditions.push(`status = $${idx++}`);
+    values.push(status);
+  }
+
+  if (search && search.trim()) {
+    conditions.push(`(buyer_email ILIKE $${idx} OR id::text ILIKE $${idx})`);
+    values.push(`%${search.trim()}%`);
+    idx++;
+  }
+
+  values.push(safeLimit);
 
   const res = await pool.query(
     `
@@ -140,11 +192,11 @@ async function listOrdersByStore(storeId, { limit = 50 } = {}) {
       created_at,
       updated_at
     FROM orders
-    WHERE store_id = $1
+    WHERE ${conditions.join(" AND ")}
     ORDER BY created_at DESC
-    LIMIT $2;
+    LIMIT $${idx};
     `,
-    [storeId, safeLimit]
+    values
   );
 
   return res.rows;
@@ -154,7 +206,8 @@ async function getOrderWithItems(storeId, orderId) {
   const orderRes = await pool.query(
     `
     SELECT id, store_id, customer_user_id, status, total_cents, currency,
-           stripe_payment_intent_id, buyer_email, created_at, updated_at
+           stripe_payment_intent_id, stripe_checkout_session_id,
+           buyer_email, discount_amount_cents, created_at, updated_at
     FROM orders
     WHERE store_id = $1 AND id = $2
     LIMIT 1;
@@ -175,7 +228,8 @@ async function getOrderWithItems(storeId, orderId) {
       oi.unit_price_cents,
       oi.created_at,
       p.title,
-      p.delivery_url
+      p.delivery_url,
+      p.image_url
     FROM order_items oi
     JOIN orders o
       ON o.id = oi.order_id
@@ -189,9 +243,26 @@ async function getOrderWithItems(storeId, orderId) {
     [orderId, storeId]
   );
 
-  return { order, items: itemsRes.rows };
+  // Customer stats from store_customers (may not exist for guest orders)
+  let customer = null;
+  if (order.buyer_email) {
+    const customerRes = await pool.query(
+      `SELECT email, order_count, total_spent_cents, first_seen_at, last_seen_at
+       FROM store_customers
+       WHERE store_id = $1 AND email = $2
+       LIMIT 1`,
+      [storeId, order.buyer_email]
+    );
+    customer = customerRes.rows[0] ?? null;
+  }
+
+  return { order, items: itemsRes.rows, customer };
 }
 
+// Idempotent: already-paid returns { kind: "OK", transitioned: false }.
+// Uses a check-then-update pattern with a re-read to handle concurrent webhook deliveries safely.
+// The UPDATE itself has AND status = 'pending' to prevent a race condition where two webhooks
+// both read "pending" and both try to transition.
 async function markOrderPaid(storeId, orderId) {
   const currentRes = await pool.query(
     `
@@ -206,7 +277,7 @@ async function markOrderPaid(storeId, orderId) {
   const current = currentRes.rows[0] || null;
   if (!current) return { kind: "NOT_FOUND" };
 
-  if (current.status === "paid") return { kind: "OK", order: current };
+  if (current.status === "paid") return { kind: "OK", order: current, transitioned: false };
   if (current.status !== "pending") return { kind: "INVALID_STATE", status: current.status };
 
   const updateRes = await pool.query(
@@ -234,11 +305,11 @@ async function markOrderPaid(storeId, orderId) {
 
     const now = reread.rows[0] || null;
     if (!now) return { kind: "NOT_FOUND" };
-    if (now.status === "paid") return { kind: "OK", order: now };
+    if (now.status === "paid") return { kind: "OK", order: now, transitioned: false };
     return { kind: "INVALID_STATE", status: now.status };
   }
 
-  return { kind: "OK", order: updated };
+  return { kind: "OK", order: updated, transitioned: true };
 }
 
 async function attachPaymentIntent(storeId, orderId, paymentIntentId) {
@@ -341,6 +412,8 @@ async function markOrderPaidByPaymentIntent(storeId, paymentIntentId) {
   return markOrderPaid(storeId, row.id);
 }
 
+// Returns the store ID for a given slug only if the store is enabled.
+// Returns null for both "not found" and "disabled" — intentionally the same response (no info leak).
 async function resolveEnabledStoreIdBySlug(slug) {
   const s = String(slug || "").trim().toLowerCase();
   if (!s) return null;
@@ -359,6 +432,8 @@ async function resolveEnabledStoreIdBySlug(slug) {
   return res.rows[0]?.id ?? null;
 }
 
+// Persists the Stripe Checkout Session ID on the order after the session is created.
+// ON CONFLICT on the unique index catches the (rare) case where two sessions race to the same order.
 async function attachCheckoutSession(orderId, checkoutSessionId) {
   const cs = String(checkoutSessionId || "").trim();
   try {
@@ -379,13 +454,148 @@ async function attachCheckoutSession(orderId, checkoutSessionId) {
   }
 }
 
+/**
+ * Enriched order list — includes product names, item count, fulfillment status.
+ * Supports optional filters: status, search, dateFrom, dateTo, productId, sortBy.
+ */
+async function listOrdersEnriched(storeId, {
+  limit = 100,
+  search,
+  status,
+  dateFrom,
+  dateTo,
+  productId,
+  sortBy = "newest",
+} = {}) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 500));
+
+  const orderByMap = {
+    newest:  "o.created_at DESC",
+    oldest:  "o.created_at ASC",
+    highest: "o.total_cents DESC",
+    lowest:  "o.total_cents ASC",
+  };
+  const orderBy = orderByMap[sortBy] || "o.created_at DESC";
+
+  const values = [storeId];
+  let idx = 2;
+
+  const statusParam  = (status && ["pending", "paid", "failed", "refunded"].includes(status)) ? status : null;
+  const searchParam  = (search && search.trim()) ? search.trim() : null;
+  const dateFromParm = dateFrom || null;
+  const dateToParm   = dateTo   || null;
+  const productParm  = productId || null;
+
+  values.push(statusParam, searchParam, dateFromParm, dateToParm, productParm, safeLimit);
+
+  const sql = `
+    SELECT
+      o.id,
+      o.store_id,
+      o.status,
+      o.total_cents,
+      o.currency,
+      o.buyer_email,
+      o.created_at,
+      o.updated_at,
+      o.discount_code_id,
+      o.discount_amount_cents,
+      o.stripe_checkout_session_id,
+      COALESCE(
+        (SELECT array_agg(p.title ORDER BY oi.created_at)
+         FROM order_items oi
+         JOIN products p ON p.id = oi.product_id
+         WHERE oi.order_id = o.id),
+        ARRAY[]::text[]
+      ) AS product_names,
+      (SELECT p.title
+       FROM order_items oi
+       JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = o.id
+       LIMIT 1) AS primary_product_name,
+      (SELECT COUNT(*)::int FROM order_items WHERE order_id = o.id) AS item_count,
+      f.status             AS fulfillment_status,
+      f.sent_at            AS fulfillment_sent_at,
+      f.opened_at          AS fulfillment_opened_at,
+      f.delivery_expires_at,
+      CASE WHEN ba.id IS NOT NULL THEN 'member' ELSE 'guest' END AS buyer_type,
+      ba.display_name      AS buyer_display_name,
+      COALESCE(o.buyer_country, sc.country) AS buyer_country
+    FROM orders o
+    LEFT JOIN order_fulfillments f
+      ON f.order_id = o.id AND f.store_id = o.store_id
+    LEFT JOIN buyer_accounts ba
+      ON ba.store_id = o.store_id AND ba.email = o.buyer_email
+    LEFT JOIN store_customers sc
+      ON sc.store_id = o.store_id AND sc.email = o.buyer_email
+    WHERE o.store_id = $1
+      AND ($2::text IS NULL OR o.status = $2)
+      AND ($3::text IS NULL OR o.buyer_email ILIKE '%' || $3 || '%' OR o.id::text ILIKE '%' || $3 || '%')
+      AND ($4::timestamptz IS NULL OR o.created_at >= $4)
+      AND ($5::timestamptz IS NULL OR o.created_at <= $5)
+      AND ($6::uuid IS NULL OR o.id IN (SELECT order_id FROM order_items WHERE product_id = $6))
+    ORDER BY ${orderBy}
+    LIMIT $7;
+  `;
+
+  const res = await pool.query(sql, values);
+  return res.rows;
+}
+
+/**
+ * Summary stats for the orders page stat cards.
+ * Supports same date/status/product filters as the list.
+ */
+async function getOrdersSummary(storeId, { dateFrom, dateTo, status, productId } = {}) {
+  const statusParam = (status && ["pending", "paid", "failed", "refunded"].includes(status)) ? status : null;
+  const dateFromParm = dateFrom || null;
+  const dateToParm   = dateTo   || null;
+  const productParm  = productId || null;
+
+  const res = await pool.query(`
+    SELECT
+      COALESCE(SUM(CASE WHEN o.status = 'paid' THEN o.total_cents ELSE 0 END), 0)::bigint AS total_revenue,
+      COUNT(*)::int                                                                          AS order_count,
+      COUNT(CASE WHEN o.status = 'paid'     THEN 1 END)::int                               AS paid_count,
+      COUNT(CASE WHEN o.status = 'pending'  THEN 1 END)::int                               AS pending_count,
+      COUNT(CASE WHEN o.status = 'failed'   THEN 1 END)::int                               AS failed_count,
+      COUNT(CASE WHEN o.status = 'refunded' THEN 1 END)::int                               AS refunded_count,
+      COUNT(CASE WHEN f.status IN ('sent', 'opened') THEN 1 END)::int                      AS delivered_count
+    FROM orders o
+    LEFT JOIN order_fulfillments f ON f.order_id = o.id AND f.store_id = o.store_id
+    WHERE o.store_id = $1
+      AND ($2::text IS NULL OR o.status = $2)
+      AND ($3::timestamptz IS NULL OR o.created_at >= $3)
+      AND ($4::timestamptz IS NULL OR o.created_at <= $4)
+      AND ($5::uuid IS NULL OR o.id IN (SELECT order_id FROM order_items WHERE product_id = $5))
+  `, [storeId, statusParam, dateFromParm, dateToParm, productParm]);
+
+  const r = res.rows[0];
+  const totalRevenue = Number(r.total_revenue);
+  const paidCount    = Number(r.paid_count);
+  return {
+    totalRevenue,
+    orderCount:       Number(r.order_count),
+    averageOrderValue: paidCount > 0 ? Math.round(totalRevenue / paidCount) : 0,
+    paidCount,
+    pendingCount:     Number(r.pending_count),
+    failedCount:      Number(r.failed_count),
+    refundedCount:    Number(r.refunded_count),
+    deliveredCount:   Number(r.delivered_count),
+    deliveryRate:     paidCount > 0 ? Math.round((Number(r.delivered_count) / paidCount) * 100) : 0,
+  };
+}
+
 module.exports = {
   createOrder,
   resolveEnabledStoreIdBySlug,
   listOrdersByStore,
+  listOrdersEnriched,
+  getOrdersSummary,
   getOrderWithItems,
   markOrderPaid,
   attachPaymentIntent,
   attachCheckoutSession,
   markOrderPaidByPaymentIntent,
+  incrementProductSalesCount,
 };

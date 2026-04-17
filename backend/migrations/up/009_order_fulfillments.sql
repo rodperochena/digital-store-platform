@@ -1,3 +1,9 @@
+-- Migration 009: Delivery fulfillment tracking table.
+-- One row per order, created when the Stripe webhook fires. Holds the hashed
+-- delivery token (raw token goes in the email link), expiry, and send status.
+-- The UNIQUE constraint on order_id ensures we don't accidentally create two
+-- fulfillment records for the same order (the fulfillment logic is idempotent).
+
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS order_fulfillments (

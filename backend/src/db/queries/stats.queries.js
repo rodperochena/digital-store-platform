@@ -1,5 +1,10 @@
 "use strict";
 
+// Queries: owner stats
+// Single-query aggregate stats for the owner dashboard header cards.
+// Uses scalar subqueries instead of GROUP BY to make the query self-documenting — each metric is
+// clearly labelled and easy to add/remove without rewriting the whole query.
+
 const { pool } = require("../pool");
 
 /**
