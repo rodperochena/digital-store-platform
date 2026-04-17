@@ -633,13 +633,28 @@ States: `pending` → `paid` (webhook or demo) | `failed` (no code transitions h
 | `fulfillment.test.js` | `triggerFulfillment` (creates record+email, idempotent, no-op on unpaid, marks failed on email error); delivery endpoint (valid → 302, invalid → 404, expired → 410, marks opened); resend delivery (200, 404, 401); order includes fulfillment status |
 | `helpers.js` | Test utility: creates test stores, products, sessions |
 
-### Test Run Status
+### Test Run Status — ❌ ALL TESTS BROKEN
 
-**Tests require a live PostgreSQL database.** `jest.env.js` sets `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres`. `npm test` runs `migrate:up` first. Without a DB, Jest exits immediately with no output.
+[VERIFIED — `npm test` was run against a live DB instance with all migrations applied]
 
-**Repeated attempts to run Jest in this audit environment produced zero output** — the process terminates before printing results when the DB is unreachable.
+```
+✅ No pending migrations.
+Test Suites: 0 of 9 total
+Tests:       0 total
+Time:        3.443 s
+TypeError: ● Invalid transformer module:
+  ".../node_modules/babel-jest/build/index.js" specified in the "transform"
+  object of Jest configuration must export a `process` or `processAsync`
+  or `createTransformer` function.
+```
 
-**[NOT VERIFIABLE: exact pass/fail count without a running DB]**
+**0 tests ran. 0 passed. 0 failed. All 9 test suites were skipped due to a setup crash.**
+
+**Root cause:** `jest@30.3.0` (resolved from `^30.2.0`) introduced a breaking change in transformer loading. Jest defaults to using `babel-jest` as its transform even though `jest.config.js` specifies no `transform` key. `babel-jest@30.3.0` exports `{ createTransformer, default }` — the function IS present — but `jest@30.3.0`'s transformer-loading code rejects it anyway (likely checks `default.process` / `default.createTransformer` rather than top-level). The project is plain CJS Node.js and never required Babel transformation; the dependency was incidental.
+
+**Fix required (not applied in this audit):** Add `transform: {}` to `jest.config.js` to disable the default babel transform entirely.
+
+**Impact:** CI (`ci.yml`) also runs `npm test`. With this bug, CI exits with 0 test suites and misleadingly reports success on the migrate step. The badge/check is meaningless. No tests have been validated by CI since `jest@30.3.0` was resolved.
 
 ### Test Quality Issues (verified from source)
 
@@ -682,8 +697,8 @@ The following areas have NO tests:
 | `npm run migrate` | `node scripts/migrate.js` | [INFERENCE: ✅ if DATABASE_URL set] |
 | `npm run migrate:up` | `node scripts/migrate.js up` | [INFERENCE: ✅ if DATABASE_URL set] |
 | `npm run migrate:status` | `node scripts/migrate.js status` | [INFERENCE: ✅ if DATABASE_URL set] |
-| `npm test` | `npm run migrate:up && jest --runInBand` | ❌ CANNOT VERIFY: requires live PostgreSQL |
-| `npm run test:ci` | `jest --runInBand --forceExit` | ❌ CANNOT VERIFY: same DB requirement |
+| `npm test` | `npm run migrate:up && jest --runInBand` | ❌ BROKEN: migrations run (✅), then Jest crashes with `babel-jest` transformer error — **0 tests run** |
+| `npm run test:ci` | `jest --runInBand --forceExit` | ❌ BROKEN: same `babel-jest` transformer crash |
 
 **No lint, typecheck, or format scripts defined.** No ESLint config, no Prettier, no TypeScript. Zero static analysis tooling.
 
@@ -721,12 +736,17 @@ Evidence: `backend/src/routes/delivery.routes.js:71`
 **Immediate action required:** Run `git log --oneline -- backend/.env` and `git show HEAD:backend/.env` (redact before sharing). If committed, rotate all secrets and purge with `git filter-repo`.  
 [INFERENCE — based on `git status` output showing file as tracked-modified, not untracked]
 
-**C5: ADMIN_KEY is a static global secret with no rotation or audit**  
+**C5: ADMIN_KEY is a static global secret with no rotation or audit**   
 All administrative operations (store creation, enabling stores, order management) use a single `ADMIN_KEY` env var. If it leaks, all stores are at risk. No rotation mechanism, no per-operation audit log, no expiry.  
 Evidence: `backend/src/middleware/admin.middleware.js`  
 [VERIFIED]
 
-**C6: ~160 uncommitted files — recent feature surface is not in git**  
+**C6: The entire test suite is broken — 0 tests run**  
+`npm test` crashes immediately after migrations with a `babel-jest` transformer API error (`TypeError: Invalid transformer module`). `jest@30.3.0` resolved from `^30.2.0` introduced a breaking change. **No tests have been executing in CI or locally since this version was resolved.** The CI badge is false — it exits 0 because the migration step passes, but Jest ran nothing. Fix: add `transform: {}` to `jest.config.js`.  
+Evidence: live run output: `Test Suites: 0 of 9 total, Tests: 0 total`  
+[VERIFIED]
+
+**C7: ~160 uncommitted files — recent feature surface is not in git**  
 Everything built since commit `fee1623` (migrations 013–031, buyer auth, all advanced query files, all advanced routes, most frontend pages including buyer flows, campaigns, analytics, reviews, etc.) is either untracked or unstaged. The branch is also 2 commits ahead of origin and not pushed. A disk failure or accidental `git checkout .` would destroy the majority of the project's recent work.  
 Evidence: `git status` at session start  
 [VERIFIED]
@@ -876,7 +896,7 @@ No structured logging in prod paths (fulfillment, webhook, email). `pino` and `p
 
 ### What could not be verified
 
-- **Test pass/fail counts:** Jest requires a live PostgreSQL instance at `localhost:5432`. Repeated attempts to run Jest in this environment produced zero output — the process terminates before printing results when the DB is unreachable. Test structure and coverage were assessed by reading source.
+- **Test pass/fail counts:** `npm test` was successfully run against a live DB (migrations applied cleanly). Result: `Test Suites: 0 of 9, Tests: 0 total` — the suite crashes before running a single test due to a `babel-jest` transformer incompatibility (see C6). Individual test file content and coverage were assessed by reading source code.
 - **Whether `backend/.env` was committed to git history:** Appearing as tracked-modified (not untracked) in `git status` is the basis for the C4 risk flag, but `git log -- backend/.env` was not run. This must be verified manually.
 - **Frontend build:** `vite build` was not run. Build errors, if any, are unknown.
 - **Click tracking implementation:** Whether `email_campaign_recipients.click_count` is actually incremented anywhere was not verified — `owner.routes.js` is 800+ lines and was read only through line 150.
