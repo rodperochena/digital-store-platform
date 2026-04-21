@@ -1,5 +1,36 @@
 # HANDOFF_REPORT.md
 
+## ⚠️ CLOSING NOTE — Repository retired
+
+This repository is archived as of the `v0-pre-eqoop` tag. Active development
+moves to the `eqoop` repository (not yet created at the time of this note).
+
+**What was fixed in the closing session:**
+- `backend/jest.config.js` — added `transform: {}` to disable default babel-jest
+  transform (jest@30.3.0 regression). See commit message for details.
+- `backend/src/app.js` — gated `ensureBucketsExist` behind `NODE_ENV !== "test"`
+  to prevent Supabase HTTP calls from blocking Jest in test runs.
+
+**What was NOT fixed and why:**
+- The test suite is still non-executable. After both fixes above, Jest still
+  hangs before running a single test. The remaining cause is at least one
+  additional open handle in the `src/app.js` require chain (evidenced by
+  `node -e "require('./src/app.js')"` hanging indefinitely in NODE_ENV=test).
+  The culprit was not isolated.
+- Demo routes (C1, C2) were not gated. The fix is a 1-line change to
+  `backend/src/routes/index.js` wrapping the `demoRouter` mount behind the
+  existing `devOnly` guard. Deferred to eqoop.
+- All other critical risks (C3 multi-item delivery, C5 ADMIN_KEY rotation,
+  H1 refund handling, etc.) remain as documented in §11.
+
+**Anyone continuing work on this repo (unlikely):**
+Read §11 (Critical Risks) before any deploy. Do NOT deploy in current state:
+- The demo checkout endpoint is live in all environments (C1).
+- The order summary endpoint leaks buyer email without auth (C2).
+- Gate both behind `devOnly` before deploying.
+
+---
+
 **Audit date:** 2026-04-16  
 **Auditor:** Forensic pass via full source code read + selective command execution  
 **Branch at time of audit:** `checkpoint-3-tests-ci`  
