@@ -6,4 +6,5 @@ module.exports = {
   setupFiles: ["<rootDir>/tests/jest.env.js"],
   setupFilesAfterEnv: ["<rootDir>/tests/jest.afterEnv.js"],
   verbose: true,
+  transform: {},
 };
