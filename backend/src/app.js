@@ -9,12 +9,16 @@ const { notFoundHandler, errorHandler } = require("./middleware/error.middleware
 const { tenantResolver } = require("./middleware/tenant.middleware");
 const { requestId } = require("./middleware/requestId.middleware");
 
-// Ensure Supabase Storage buckets exist on startup (fire-and-forget)
-try {
-  const { ensureBucketsExist } = require("./lib/storage");
-  ensureBucketsExist().catch((err) => console.warn("Storage bucket setup:", err.message));
-} catch {
-  // SUPABASE_URL / SUPABASE_SERVICE_KEY not set — storage features unavailable
+// Ensure Supabase Storage buckets exist on startup (fire-and-forget).
+// Skipped in tests — test runs don't need live bucket initialization, and the
+// pending HTTP calls keep the Node event loop open, which prevents Jest from exiting.
+if (process.env.NODE_ENV !== "test") {
+  try {
+    const { ensureBucketsExist } = require("./lib/storage");
+    ensureBucketsExist().catch((err) => console.warn("Storage bucket setup:", err.message));
+  } catch {
+    // SUPABASE_URL / SUPABASE_SERVICE_KEY not set — storage features unavailable
+  }
 }
 
 function createApp() {
